@@ -10,7 +10,7 @@ local lighting = game:GetService("Lighting")
 -- [ORIGINAL LOGIC - DO NOT TOUCH]
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
-local hitboxSize = 15 -- Biến lưu trữ kích thước Hitbox (Mặc định 15)
+local hitboxSize = 15 -- Biến lưu trữ kích thước Hitbox
 local activeNPCs = {}      
 local trackedParts = {}    
 local originalSizes = {}   
@@ -603,8 +603,8 @@ local win, rootGui = Library:CreateWindow()
 local combatTab = win:CreateTab("Combat")
 combatTab:AddToggle("Silent Hitbox (All NPCs)", function(v) silentEnabled = v end)
 combatTab:AddToggle("Show Hitbox", function(v) showHitbox = v end)
--- Thêm thanh trượt Hitbox từ 0 đến 20
-combatTab:AddSlider("Hitbox Size", 0, 20, 15, function(v)
+-- Đã cập nhật giới hạn từ 0 lên 30 cho bạn
+combatTab:AddSlider("Hitbox Size", 0, 30, 15, function(v)
     hitboxSize = v
 end)
 
