@@ -1,0 +1,86 @@
+local Players = game:GetService('Players')
+local LocalPlayer = Players.LocalPlayer
+
+local Camera = Workspace.CurrentCamera
+local CenterPosition = Camera.ViewportSize / 2
+
+local Drawings = {FovOutline = nil, FovInline = nil}
+
+local Functions = {
+    GetClients = filtergc('function', {Name = 'GetClients', Constants = {'Clients'}}, false),
+    GetMuzzleCFrame = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
+    GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
+}
+
+local ClientService = nil
+
+function AddDrawing(Type, Properties)
+    local DrawingObject = Drawing.new(Type)
+
+    for Property, Value in pairs(Properties) do
+        DrawingObject[Property] = Value
+    end
+
+    return DrawingObject
+end
+
+function GetClosest()
+    local ClosestPlayer, ClosestData, ClosestDistance = nil, nil, math.huge
+
+    for Player, Data in pairs(ClientService.Clients) do
+        if Player == LocalPlayer then continue end
+        
+        if not Data.Actor or not Data.Actor.Alive then continue end
+        if Data.Squad == ClientService.LocalClient.Squad then continue end
+
+        local Position, OnScreen = Camera:WorldToViewportPoint(Data.Actor.Parts.Head.Position)
+        if not OnScreen then continue end
+
+        local Distance = (Vector2.new(Position.X, Position.Y) - CenterPosition).Magnitude
+        if Distance > 180 or Distance > ClosestDistance then continue end
+
+        ClosestPlayer = Player; ClosestData = Data; ClosestDistance = Distance
+    end
+    
+    return ClosestPlayer, ClosestData, ClosestDistance
+end
+
+Drawings.FovOutline = AddDrawing('Circle', {Visible = true, Position = CenterPosition, Radius = 180, Thickness = 3.5, Color = Color3.new(0, 0, 0)})
+Drawings.FovInline = AddDrawing('Circle', {Visible = false, Position = CenterPosition, Radius = 180, Thickness = 1.5, Color = Color3.new(1, 1, 1)})
+
+for _, Function in pairs(Functions.GetClients) do
+    local Info = getinfo(Function)
+    if not Info.source:find('ClientService') then continue end
+
+    Functions.GetClients = Function
+end
+
+local OldClients; OldClients = hookfunction(Functions.GetClients, function(Self)
+    ClientService = Self; return OldClients(Self)
+end)
+
+local OldMuzzle; OldMuzzle = hookfunction(Functions.GetMuzzleCFrame, function(Self, Cast)
+    local Origin, Barrel, Camera = OldMuzzle(Self, Cast)
+
+    if not Cast and Origin then
+        local Player, Data = GetClosest()
+        if not Player then return Origin, Barrel, Camera end
+        
+        local NewOrigin = CFrame.new(Origin.Position, Data.Actor.Parts.Head.Position)
+        return NewOrigin, Barrel, Camera
+    end
+
+    return Origin, Barrel, Camera
+end)
+
+local OldRecoil; OldRecoil = hookfunction(Functions.GetRecoil, function(...)
+    local Args = {...}
+    
+    Args[1]['Barrel_Spread'] = 0; Args[1]['RecoilForce_Tap'] = 0
+
+    return OldRecoil(unpack(Args))
+end)
+
+Camera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+    CenterPosition = Camera.ViewportSize / 2
+end)
