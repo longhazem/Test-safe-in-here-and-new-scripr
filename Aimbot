@@ -45,7 +45,7 @@ function GetClosest()
     return ClosestPlayer, ClosestData, ClosestDistance
 end
 
-Drawings.FovOutline = AddDrawing('Circle', {Visible = true, Position = CenterPosition, Radius = 180, Thickness = 3.5, Color = Color3.new(0, 0, 0)})
+Drawings.FovOutline = AddDrawing('Circle', {Visible = false, Position = CenterPosition, Radius = 180, Thickness = 3.5, Color = Color3.new(0, 0, 0)})
 Drawings.FovInline = AddDrawing('Circle', {Visible = false, Position = CenterPosition, Radius = 180, Thickness = 1.5, Color = Color3.new(1, 1, 1)})
 
 for _, Function in pairs(Functions.GetClients) do
