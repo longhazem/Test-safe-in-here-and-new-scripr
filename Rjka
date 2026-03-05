@@ -1,106 +1,106 @@
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local Camera = Workspace.CurrentCamera
-local LP = Players.LocalPlayer
+-- ════════════════════════════════════════════════════════════
+-- 1. KHAI BÁO BIẾN TRẠNG THÁI (STATE)
+-- ════════════════════════════════════════════════════════════
+local Players          = game:GetService("Players")
+local Workspace        = game:GetService("Workspace")
+local Camera           = Workspace.CurrentCamera
+local LP               = Players.LocalPlayer
+
+local activeNPCs       = {} -- Bảng lưu trữ NPC đang hoạt động [cite: 1]
+local silentAimPvE     = true  -- Bật Silent Aim cho NPC [cite: 3]
+local silentAimFOV     = 350   -- Phạm vi quét mục tiêu (pixel) [cite: 3]
+local silentAimPart    = "Head" -- Bộ phận nhắm tới (Head hoặc HumanoidRootPart) [cite: 3]
+local silentAimChance  = 100   -- Tỷ lệ trúng (0-100) [cite: 3]
+local silentAimHooked  = false
 
 -- ════════════════════════════════════════════════════════════
--- CẤU HÌNH (SETTINGS)
+-- 2. HÀM TÌM MỤC TIÊU NPC GẦN TÂM MÀN HÌNH NHẤT
 -- ════════════════════════════════════════════════════════════
-local silentAimEnabled = true
-local silentAimFOV = 180
-local silentAimPart = "Head" -- Mục tiêu ưu tiên
+local function getSilentAimTarget()
+    local cam  = Camera
+    local vp   = cam.ViewportSize
+    local cx, cy = vp.X / 2, vp.Y / 2
+    local best, bestDist = nil, math.huge
 
--- Danh sách từ khóa nhận diện NPC của bạn
-local botKeywords = {"MALE", "male", "MALES", "males", "BOT", "bot", "BOTS", "AI", "AIS"}
+    if silentAimPvE then
+        -- Quét qua danh sách NPC đã được ESP nhận diện [cite: 34]
+        for m, d in pairs(activeNPCs) do
+            if not m.Parent then continue end
+            local part = m:FindFirstChild(silentAimPart) or d.head
+            if not part or not part.Parent then continue end
+            local sp, onScreen = cam:WorldToViewportPoint(part.Position)
+            if not onScreen then continue end
+            local dist = math.sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
+            if dist < silentAimFOV and dist < bestDist then
+                bestDist = dist; best = part
+            end
+        end
 
--- ════════════════════════════════════════════════════════════
--- DRAWING (VÒNG FOV)
--- ════════════════════════════════════════════════════════════
-local fovCircle = Drawing.new("Circle")
-fovCircle.Thickness = 1.5
-fovCircle.Color = Color3.fromRGB(255, 100, 100)
-fovCircle.Transparency = 0.7
-fovCircle.Filled = false
-fovCircle.Visible = true
-fovCircle.Radius = silentAimFOV
-
--- ════════════════════════════════════════════════════════════
--- LOGIC QUÉT NPC (DỰA TRÊN APEX V4)
--- ════════════════════════════════════════════════════════════
-local function isTargetNPC(model)
-    if not model:IsA("Model") then return false end
-    local name = model.Name
-    for _, kw in ipairs(botKeywords) do
-        if name:find(kw) then return true end
-    end
-    return false
-end
-
-local function getBestNPC()
-    local target = nil
-    local shortestDist = silentAimFOV
-    local center = Camera.ViewportSize / 2
-
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if isTargetNPC(obj) then
-            local hum = obj:FindFirstChildOfClass("Humanoid")
-            local head = obj:FindFirstChild(silentAimPart) or obj:FindFirstChild("Head")
-            
-            if hum and head and hum.Health > 0 then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if dist < shortestDist then
-                        shortestDist = dist
-                        target = head
-                    end
+        -- Quét trực tiếp thư mục Bots của BRM5 để tránh bỏ sót [cite: 35]
+        local botsFolder = Workspace:FindFirstChild("Bots")
+        if botsFolder then
+            for _, bot in ipairs(botsFolder:GetChildren()) do
+                if not bot:IsA("Model") then continue end
+                local part = bot:FindFirstChild(silentAimPart) or bot:FindFirstChild("Head") or bot:FindFirstChildWhichIsA("BasePart")
+                if not part then continue end
+                local hum = bot:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health <= 0 then continue end
+                local sp, onScreen = cam:WorldToViewportPoint(part.Position)
+                if not onScreen then continue end
+                local dist = math.sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
+                if dist < silentAimFOV and dist < bestDist then
+                    bestDist = dist; best = part
                 end
             end
         end
     end
-    return target
+    return best
 end
 
 -- ════════════════════════════════════════════════════════════
--- HOOKING (CAN THIỆP HỆ THỐNG SÚNG)
+-- 3. CƠ CHẾ BẺ HƯỚNG ĐẠN (HOOK GETMUZZLECFRMAME)
 -- ════════════════════════════════════════════════════════════
-local Functions = {
-    GetMuzzle = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
-    GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
-}
-
--- Hook hướng đạn (Silent Aim)
-local oldMuzzle; oldMuzzle = hookfunction(Functions.GetMuzzle, function(self, cast)
-    local origin, barrel, camCF = oldMuzzle(self, cast)
-
-    -- Chỉ bẻ hướng khi thực sự bắn (không phải lúc cast kiểm tra tầm nhìn)
-    if silentAimEnabled and not cast and origin then
-        local target = getBestNPC()
-        if target then
-            -- Tính toán hướng mới từ nòng súng đến đầu NPC
-            local newCFrame = CFrame.new(origin.Position, target.Position)
-            return newCFrame, barrel, camCF
+local function makeMuzzleHook(OldFn)
+    return hookfunction(OldFn, function(Self, Cast)
+        local Origin, Barrel, CamArg = OldFn(Self, Cast)
+        -- Chỉ bẻ hướng khi thực sự bắn (Cast == nil/false) [cite: 40]
+        if not Cast and Origin then
+            if silentAimChance < 100 and math.random(1, 100) > silentAimChance then
+                return Origin, Barrel, CamArg
+            end
+            local target = getSilentAimTarget()
+            if target and target.Parent then
+                -- Trả về vị trí nòng súng hướng thẳng vào mục tiêu [cite: 40]
+                return CFrame.new(Origin.Position, target.Position), Barrel, CamArg
+            end
         end
-    end
-    return origin, barrel, camCF
-end)
-
--- Hook độ giật (No Recoil)
-local oldRecoil; oldRecoil = hookfunction(Functions.GetRecoil, function(...)
-    local args = {...}
-    if args[1] and type(args[1]) == "table" then
-        args[1].Barrel_Spread = 0
-        args[1].RecoilForce_Tap = 0
-    end
-    return oldRecoil(unpack(args))
-end)
+        return Origin, Barrel, CamArg
+    end)
+end
 
 -- ════════════════════════════════════════════════════════════
--- VÒNG LẶP CẬP NHẬT
+-- 4. KÍCH HOẠT HỆ THỐNG
 -- ════════════════════════════════════════════════════════════
-RunService.RenderStepped:Connect(function()
-    local center = Camera.ViewportSize / 2
-    fovCircle.Position = center
-    fovCircle.Radius = silentAimFOV
-end)
+local function initSilentAimHook()
+    if silentAimHooked then return end
+
+    -- Tìm tất cả các hàm GetMuzzleCFrame trong bộ nhớ game 
+    local ok, fns = pcall(function()
+        return filtergc("function", { Name = "GetMuzzleCFrame" }, false)
+    end)
+
+    if ok and type(fns) == "table" then
+        for _, fn in ipairs(fns) do
+            if type(fn) == "function" then
+                pcall(makeMuzzleHook, fn)
+            end
+        end
+        silentAimHooked = true
+        print("[SilentAim] Successfully hooked PvE.")
+    else
+        warn("[SilentAim] Failed to find functions or filtergc unavailable.")
+    end
+end
+
+-- Chạy khởi tạo
+initSilentAimHook()
