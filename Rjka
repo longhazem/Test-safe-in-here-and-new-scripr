@@ -1,0 +1,129 @@
+local Players = game:GetService('Players')
+local Workspace = game:GetService('Workspace')
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Cấu hình Silent Aim
+local silentAimFOV = 180
+local silentAimPart = "Head" -- Bộ phận ưu tiên (Head, Torso, etc.)
+
+-- Khởi tạo vị trí tâm màn hình
+local CenterPosition = Camera.ViewportSize / 2
+
+-- Quản lý vòng FOV (Vẽ lên màn hình)
+local Drawings = {
+    FovOutline = nil,
+    FovInline = nil
+}
+
+-- Các hàm cần Hook từ Game
+local Functions = {
+    GetMuzzleCFrame = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
+    GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
+}
+
+-- Hàm tạo đối tượng Drawing
+function AddDrawing(Type, Properties)
+    local DrawingObject = Drawing.new(Type)
+    for Property, Value in pairs(Properties) do
+        DrawingObject[Property] = Value
+    end
+    return DrawingObject
+end
+
+-- Hàm tìm Bot gần tâm màn hình nhất
+function GetClosestBot()
+    local bestTargetPart = nil
+    local bestDist = silentAimFOV
+
+    local botsFolder = Workspace:FindFirstChild("Bots")
+    if not botsFolder then return nil end
+
+    for _, bot in ipairs(botsFolder:GetChildren()) do
+        -- Kiểm tra xem có phải là Model của Bot không
+        if not bot:IsA("Model") then continue end
+        
+        -- Kiểm tra xem Bot còn sống không (Humanoid)
+        local hum = bot:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health <= 0 then continue end
+
+        -- Tìm bộ phận để bắn (Ưu tiên Head -> Part bất kỳ)
+        local part = bot:FindFirstChild(silentAimPart) 
+                  or bot:FindFirstChild("Head") 
+                  or bot:FindFirstChildWhichIsA("BasePart")
+        
+        if not part then continue end
+
+        -- Chuyển tọa độ thế giới sang tọa độ màn hình
+        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+        
+        if onScreen then
+            -- Tính khoảng cách từ tâm màn hình đến mục tiêu
+            local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - CenterPosition).Magnitude
+            
+            if mouseDist < bestDist then
+                bestDist = mouseDist
+                bestTargetPart = part
+            end
+        end
+    end
+    
+    return bestTargetPart
+end
+
+-- Khởi tạo hiển thị vòng FOV
+Drawings.FovOutline = AddDrawing('Circle', {
+    Visible = true, 
+    Position = CenterPosition, 
+    Radius = silentAimFOV, 
+    Thickness = 2, 
+    Color = Color3.new(0, 0, 0), 
+    Transparency = 0.5
+})
+
+Drawings.FovInline = AddDrawing('Circle', {
+    Visible = true, 
+    Position = CenterPosition, 
+    Radius = silentAimFOV, 
+    Thickness = 1, 
+    Color = Color3.new(0, 1, 0), -- Màu xanh lá cho Bots
+    Transparency = 0.8
+})
+
+-- Hook logic hướng nòng súng (Silent Aim)
+local OldMuzzle; OldMuzzle = hookfunction(Functions.GetMuzzleCFrame, function(Self, Cast)
+    local Origin, Barrel, CamCF = OldMuzzle(Self, Cast)
+
+    -- Nếu đang bắn (không phải Raycast kiểm tra) và có điểm xuất phát
+    if not Cast and Origin then
+        local TargetBotPart = GetClosestBot()
+        
+        if TargetBotPart then
+            -- Thay đổi hướng CFrame của nòng súng hướng về phía Bot
+            local NewOrigin = CFrame.new(Origin.Position, TargetBotPart.Position)
+            return NewOrigin, Barrel, CamCF
+        end
+    end
+
+    return Origin, Barrel, CamCF
+end)
+
+-- Hook loại bỏ độ giật và độ tỏa đạn
+local OldRecoil; OldRecoil = hookfunction(Functions.GetRecoil, function(...)
+    local Args = {...}
+    
+    if Args[1] and typeof(Args[1]) == "table" then
+        -- Chỉnh spread và recoil về 0
+        Args[1]['Barrel_Spread'] = 0
+        Args[1]['RecoilForce_Tap'] = 0
+    end
+
+    return OldRecoil(unpack(Args))
+end)
+
+-- Cập nhật lại tâm khi người chơi thay đổi độ phân giải màn hình
+Camera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+    CenterPosition = Camera.ViewportSize / 2
+    Drawings.FovOutline.Position = CenterPosition
+    Drawings.FovInline.Position = CenterPosition
+end)
