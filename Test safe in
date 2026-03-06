@@ -1,15 +1,13 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
--- [SERVICES]
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
 local lighting = game:GetService("Lighting")
 
--- [STATE VARIABLES]
+-- [ORIGINAL LOGIC - GIỮ NGUYÊN 100%]
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local hitboxSize = 15 
@@ -21,30 +19,24 @@ local wallEnabled = false
 local silentEnabled = false     
 local showHitbox = false        
 local fullBrightEnabled = false 
-local fastScanEnabled = false
-local isUnloaded = false        
+
+local isUnloaded = false     
+local fastScanEnabled = false   
 local patchOptions = { recoil = false, firemodes = false }
 
 local maleColor = Color3.fromRGB(0, 255, 0)
 local zombieColor = Color3.fromRGB(255, 0, 0)
-local originalLighting = {
-    Brightness = lighting.Brightness,
-    ClockTime = lighting.ClockTime,
-    FogEnd = lighting.FogEnd,
-    GlobalShadows = lighting.GlobalShadows,
-    Ambient = lighting.Ambient
-}
 
 ------------------------------------------------------------------
--- [[ LOGIC HỖ TRỢ: HITBOX & UTILS ]]
+-- [[ HOOKS & SPOOFING (Hitbox Expander) ]]
 ------------------------------------------------------------------
 local ModifiedParts = {}
 local OriginalSizes = {}
 
--- Metatable Hooking (Spoofing Size)
 local mt = getrawmetatable(game)
 local old_index = mt.__index
 setreadonly(mt, false)
+
 mt.__index = newcclosure(function(t, k)
     if k == "Size" and ModifiedParts[t] then
         return OriginalSizes[t] or Vector3.new(1, 1, 1)
@@ -71,36 +63,77 @@ local function UpdateHitboxes()
     local camPos = camera.CFrame.Position
 
     for model, data in pairs(activeNPCs) do
-        local head = data.head
+        local head = data.head 
+        
         if not model.Parent then
-            ModifiedParts[head] = nil
+            if head and ModifiedParts[head] then
+                ModifiedParts[head] = nil
+            end
             continue
         end
 
         if head and head:IsA("BasePart") then
             local offset = head.Position - camPos
-            if offset.Magnitude < 5 then continue end 
+            local distSqr = offset:Dot(offset)
+            
+            if distSqr < 25 then continue end 
+
+            if distSqr > 1000000 then 
+                if ModifiedParts[head] then
+                    head.Size = OriginalSizes[head]
+                    head.Transparency = 1
+                    head.CanCollide = false
+                    ModifiedParts[head] = nil
+                end
+                continue 
+            end
 
             if not ModifiedParts[head] then
                 ModifiedParts[head] = true
                 OriginalSizes[head] = head.Size
             end
+           
+            if head.Size ~= expansion then head.Size = expansion end
+            if not head.CanCollide then head.CanCollide = true end 
             
-            head.Size = expansion
-            head.CanCollide = true
             head.Transparency = showHitbox and 0.4 or 1
         end
     end
 end
 
+task.spawn(function()
+    while not isUnloaded do
+        pcall(UpdateHitboxes)
+        task.wait(1)
+    end
+end)
+
+------------------------------------------------------------------
+-- [CÁC LOGIC CÒN LẠI CỦA FILE GỐC]
+------------------------------------------------------------------
+local originalLighting = {
+    Brightness = lighting.Brightness,
+    ClockTime = lighting.ClockTime,
+    FogEnd = lighting.FogEnd,
+    GlobalShadows = lighting.GlobalShadows,
+    Ambient = lighting.Ambient
+}
+
+local function getRootPart(model)
+    return model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
+end
+
 local function isValidNPC(model)
     local name = model.Name:lower()
+    local isTargetName = (name == "male" or name == "zombie" or name == "zombies")
     if name == "male" then
+        local hasAI = false
         for _, c in ipairs(model:GetChildren()) do
-            if c.Name:sub(1, 3) == "AI_" then return true end
+            if type(c.Name) == "string" and c.Name:sub(1, 3) == "AI_" then hasAI = true break end
         end
+        return hasAI
     end
-    return (name == "zombie" or name == "zombies" or name == "male")
+    return isTargetName
 end
 
 local function createBoxForPart(part)
@@ -111,9 +144,12 @@ local function createBoxForPart(part)
     sphere.Adornee = part
     sphere.AlwaysOnTop = true 
     sphere.ZIndex = 10
-    sphere.Transparency = 0.5
+    sphere.Transparency = 0.1
     local model = part.Parent
-    sphere.Color3 = (model.Name:lower():find("zombie")) and zombieColor or maleColor
+    if model then
+        local name = model.Name:lower()
+        sphere.Color3 = (name == "zombie" or name == "zombies") and zombieColor or maleColor
+    end
     sphere.Parent = part
     trackedParts[part] = true
 end
@@ -127,31 +163,33 @@ end
 
 local function addNPC(model)
     if activeNPCs[model] or not isValidNPC(model) then return end
-    local head = model:FindFirstChild("Head") or model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart")
-    if head then
-        activeNPCs[model] = { head = head }
-        if wallEnabled then createBoxForPart(head) end
-    end
+    local head = model:FindFirstChild("Head")
+    local root = getRootPart(model)
+    if not (head or root) then return end
+    
+    activeNPCs[model] = { head = head or root, root = root }
+    if wallEnabled then createBoxForPart(head or root) end
 end
 
-local function patchWeapons()
-    local success, weaponsFolder = pcall(function() 
-        return RS.Shared.Configs.Weapon.Weapons_Player 
-    end)
-    if not success then return end
-
+local function patchWeapons(options)
+    local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
+    if not weaponsFolder then return end
     for _, platform in pairs(weaponsFolder:GetChildren()) do
-        for _, weapon in pairs(platform:GetChildren()) do
-            for _, child in pairs(weapon:GetChildren()) do
-                if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
-                    local s, receiver = pcall(require, child)
-                    if s and receiver.Config and receiver.Config.Tune then
-                        local tune = receiver.Config.Tune
-                        if patchOptions.recoil then
-                            tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.RecoilForce_Tap = 0
-                            tune.RecoilForce_Impulse = 0 tune.Recoil_Range = Vector2.zero
+       if platform.Name:match("^Platform_") then
+            for _, weapon in pairs(platform:GetChildren()) do
+                for _, child in pairs(weapon:GetChildren()) do
+                    if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
+                        local success, receiver = pcall(require, child)
+                        if success and receiver and receiver.Config and receiver.Config.Tune then
+                            local tune = receiver.Config.Tune
+                            if options.recoil then
+                                tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.RecoilForce_Tap = 0
+                                tune.RecoilForce_Impulse = 0 tune.Recoil_Range = Vector2.zero
+                                tune.Recoil_Camera = 0 tune.RecoilAccelDamp_Crouch = Vector3.new(1, 1, 1)
+                                tune.RecoilAccelDamp_Prone = Vector3.new(1, 1, 1)
+                            end
+                            if options.firemodes then tune.Firemodes = {3, 2, 1, 0} end
                         end
-                        if patchOptions.firemodes then tune.Firemodes = {3, 2, 1, 0} end
                     end
                 end
             end
@@ -160,157 +198,227 @@ local function patchWeapons()
 end
 
 ------------------------------------------------------------------
--- [[ RAYFIELD UI SETUP ]]
+-- [[ RAYFIELD UI LIBRARY ]]
 ------------------------------------------------------------------
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local CustomTheme = {
+	TextColor = Color3.fromRGB(240, 240, 240),
+	Background = Color3.fromRGB(25, 25, 25),
+	Topbar = Color3.fromRGB(34, 34, 34),
+	Shadow = Color3.fromRGB(20, 20, 20),
+	NotificationBackground = Color3.fromRGB(20, 20, 20),
+	NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
+	TabBackground = Color3.fromRGB(80, 80, 80),
+	TabStroke = Color3.fromRGB(85, 85, 85),
+	TabBackgroundSelected = Color3.fromRGB(210, 210, 210),
+	TabTextColor = Color3.fromRGB(240, 240, 240),
+	SelectedTabTextColor = Color3.fromRGB(50, 50, 50),
+	ElementBackground = Color3.fromRGB(35, 35, 35),
+	ElementBackgroundHover = Color3.fromRGB(40, 40, 40),
+	SecondaryElementBackground = Color3.fromRGB(25, 25, 25),
+	ElementStroke = Color3.fromRGB(50, 50, 50),
+	SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
+	SliderBackground = Color3.fromRGB(50, 138, 220),
+	SliderProgress = Color3.fromRGB(50, 138, 220),
+	SliderStroke = Color3.fromRGB(58, 163, 255),
+	ToggleBackground = Color3.fromRGB(30, 30, 30),
+	ToggleEnabled = Color3.fromRGB(0, 146, 214),
+	ToggleDisabled = Color3.fromRGB(100, 100, 100),
+	ToggleEnabledStroke = Color3.fromRGB(0, 170, 255),
+	ToggleDisabledStroke = Color3.fromRGB(125, 125, 125),
+	ToggleEnabledOuterStroke = Color3.fromRGB(100, 100, 100),
+	ToggleDisabledOuterStroke = Color3.fromRGB(65, 65, 65),
+	DropdownSelected = Color3.fromRGB(40, 40, 40),
+	DropdownUnselected = Color3.fromRGB(30, 30, 30),
+	InputBackground = Color3.fromRGB(30, 30, 30),
+	InputStroke = Color3.fromRGB(65, 65, 65),
+	PlaceholderColor = Color3.fromRGB(178, 178, 178)
+}
+
 local Window = Rayfield:CreateWindow({
-    Name = "longtokai hub",
-    Icon = "skull",
-    LoadingTitle = "🐧",
-    LoadingSubtitle = "by LONGTOKAI",
-    ConfigurationSaving = { Enabled = true, FolderName = "LongTokaiConfig", FileName = "Main" },
-    KeySystem = false
+   Name = "longtokai hub",
+   Icon = 0, 
+   LoadingTitle = "🐧",
+   LoadingSubtitle = "by LONGTOKAI",
+   ShowText = "Rayfield", 
+   Theme = CustomTheme, 
+   ToggleUIKeybind = "K", 
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, 
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, 
+      FileName = "Longtokai Hub"
+   },
+
+   Discord = {
+      Enabled = false, 
+      Invite = "noinvitelink", 
+      RememberJoins = false 
+   },
+
+   KeySystem = false
 })
 
--- TABS
-local CombatTab = Window:CreateTab("Combat ⚔️", "crosshair")
-local VisualTab = Window:CreateTab("Visuals 👁️", "eye")
-local WeaponTab = Window:CreateTab("Weapons 🔫", "shield")
-local SettingTab = Window:CreateTab("Settings ⚙️", "settings")
+------------------------------------------------------------------
+-- [ TABS & SECTIONS ]
+------------------------------------------------------------------
 
--- SECTION: COMBAT
-CombatTab:CreateSection("NPC Hitbox Expander")
+-- COMBAT TAB
+local CombatTab = Window:CreateTab("Combat ⚔️", nil)
+local CombatSection = CombatTab:CreateSection("Hitbox & Aim")
+
 CombatTab:CreateToggle({
-    Name = "Silent Hitbox (All NPCs)",
-    CurrentValue = false,
-    Flag = "silent_hitbox",
-    Callback = function(Value) silentEnabled = Value end,
+   Name = "Silent Hitbox (All NPCs)",
+   CurrentValue = false,
+   Flag = "SilentHitbox",
+   Callback = function(Value) silentEnabled = Value end,
 })
+
 CombatTab:CreateToggle({
-    Name = "Show Hitbox Visual",
-    CurrentValue = false,
-    Flag = "show_hitbox",
-    Callback = function(Value) showHitbox = Value end,
+   Name = "Show Hitbox",
+   CurrentValue = false,
+   Flag = "ShowHitbox",
+   Callback = function(Value) showHitbox = Value end,
 })
+
 CombatTab:CreateSlider({
-    Name = "Hitbox Size",
-    Range = {0, 30},
-    Increment = 1,
-    Suffix = "Studs",
-    CurrentValue = 15,
-    Flag = "hitbox_size",
-    Callback = function(Value) hitboxSize = Value end,
+   Name = "Hitbox Size",
+   Range = {0, 20},
+   Increment = 1,
+   Suffix = "Studs",
+   CurrentValue = 15,
+   Flag = "HitboxSize",
+   Callback = function(Value) hitboxSize = Value end,
 })
 
--- SECTION: VISUALS
-VisualTab:CreateSection("Esp & Lighting")
-VisualTab:CreateToggle({
-    Name = "ESP Sphere (Green:Male, Red:Zombie)",
-    CurrentValue = false,
-    Flag = "esp_sphere",
-    Callback = function(Value)
-        wallEnabled = Value
-        if wallEnabled then 
-            for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
-        else 
-            destroyAllBoxes() 
-        end
-    end,
-})
-VisualTab:CreateToggle({
-    Name = "FullBright",
-    CurrentValue = false,
-    Flag = "fullbright",
-    Callback = function(Value) fullBrightEnabled = Value end,
+
+-- VISIBLE TAB
+local VisibleTab = Window:CreateTab("Visible 👁️", nil)
+local VisibleSection = VisibleTab:CreateSection("ESP & World")
+
+VisibleTab:CreateToggle({
+   Name = "ESP Sphere (M:G, Z:R)",
+   CurrentValue = false,
+   Flag = "ESPSphere",
+   Callback = function(Value) 
+       wallEnabled = Value
+       if wallEnabled then 
+           for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
+       else 
+           destroyAllBoxes() 
+       end 
+   end,
 })
 
-local noFogConnection
-VisualTab:CreateToggle({
-    Name = "Remove Fog",
-    CurrentValue = false,
-    Flag = "no_fog",
-    Callback = function(Value)
+VisibleTab:CreateToggle({
+   Name = "Auto Fast Scan",
+   CurrentValue = false,
+   Flag = "FastScan",
+   Callback = function(Value) fastScanEnabled = Value end,
+})
+
+VisibleTab:CreateToggle({
+   Name = "FullBright",
+   CurrentValue = false,
+   Flag = "FullBright",
+   Callback = function(Value) 
+       fullBrightEnabled = Value
+       if not Value then for p, val in pairs(originalLighting) do lighting[p] = val end end
+   end,
+})
+
+local noFogConnection = nil
+VisibleTab:CreateToggle({
+   Name = "No Fog",
+   CurrentValue = false,
+   Flag = "NoFog",
+   Callback = function(Value) 
         local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
         if atmosphere then
             if Value then
                 atmosphere.Density = 0
                 noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function() atmosphere.Density = 0 end)
             else
-                if noFogConnection then noFogConnection:Disconnect() end
+                if noFogConnection then noFogConnection:Disconnect(); noFogConnection = nil end
             end
         end
-    end,
+   end,
 })
 
-VisualTab:CreateSection("Scanning")
-VisualTab:CreateToggle({
-    Name = "Fast Auto Scan (Find New NPCs)",
-    CurrentValue = false,
-    Flag = "fast_scan",
-    Callback = function(Value) fastScanEnabled = Value end,
+
+-- WEAPONS TAB
+local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
+local WeaponsSection = WeaponsTab:CreateSection("Gun Mods")
+
+WeaponsTab:CreateToggle({
+   Name = "Anti-Recoil",
+   CurrentValue = false,
+   Flag = "AntiRecoil",
+   Callback = function(Value) patchOptions.recoil = Value patchWeapons(patchOptions) end,
 })
 
--- SECTION: WEAPONS
-WeaponTab:CreateSection("Weapon Modifications")
-WeaponTab:CreateToggle({
-    Name = "Anti-Recoil (No Shake)",
-    CurrentValue = false,
-    Flag = "anti_recoil",
-    Callback = function(Value) 
-        patchOptions.recoil = Value 
-        patchWeapons()
-    end,
-})
-WeaponTab:CreateToggle({
-    Name = "Unlock All Firemodes",
-    CurrentValue = false,
-    Flag = "unlock_fire",
-    Callback = function(Value) 
-        patchOptions.firemodes = Value 
-        patchWeapons()
-    end,
+WeaponsTab:CreateToggle({
+   Name = "Unlock Firemodes",
+   CurrentValue = false,
+   Flag = "UnlockFiremodes",
+   Callback = function(Value) patchOptions.firemodes = Value patchWeapons(patchOptions) end,
 })
 
--- SECTION: SETTINGS
-SettingTab:CreateSection("Script Control")
-SettingTab:CreateButton({
-    Name = "Unload Script",
-    Callback = function()
-        isUnloaded = true
-        silentEnabled = false
-        UpdateHitboxes()
-        destroyAllBoxes()
-        if noFogConnection then noFogConnection:Disconnect() end
-        Rayfield:Destroy()
-    end,
+
+-- SETTINGS TAB
+local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
+local SettingsSection = SettingsTab:CreateSection("System")
+
+SettingsTab:CreateButton({
+   Name = "Unload Script",
+   Callback = function()
+       isUnloaded = true
+       silentEnabled = false
+       UpdateHitboxes() -- Restore one last time
+       destroyAllBoxes()
+       if noFogConnection then noFogConnection:Disconnect() end
+       Rayfield:Destroy() -- Phá hủy giao diện Rayfield
+   end,
 })
+
 
 ------------------------------------------------------------------
--- [[ SYSTEM LOOPS ]]
+-- [ SYSTEM LOOPS - GIỮ NGUYÊN HOẠT ĐỘNG NGẦM ]
 ------------------------------------------------------------------
-
--- Hitbox Loop (1Hz)
 task.spawn(function()
-    while not isUnloaded do
-        pcall(UpdateHitboxes)
-        task.wait(1)
+    local all = Workspace:GetChildren()
+    for i, m in ipairs(all) do
+        if m:IsA("Model") and isValidNPC(m) then addNPC(m) end
+        if i % 10 == 0 then task.wait() end 
     end
 end)
 
--- Scanner Loop
+table.insert(wallConnections, Workspace.ChildAdded:Connect(function(m)
+    if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
+end))
+
 task.spawn(function()
     while not isUnloaded do
         if fastScanEnabled then
-            for _, m in ipairs(Workspace:GetChildren()) do
-                if m:IsA("Model") and not activeNPCs[m] then addNPC(m) end
+            local children = Workspace:GetChildren()
+            for i, m in ipairs(children) do
+                if not isUnloaded and fastScanEnabled then
+                    if m:IsA("Model") and not activeNPCs[m] then if isValidNPC(m) then addNPC(m) end end
+                    if i % 20 == 0 then task.wait() end 
+                end
             end
         end
-        task.wait(2)
+        task.wait(1) 
     end
 end)
 
--- FullBright Loop
 RunService.RenderStepped:Connect(function()
-    if fullBrightEnabled and not isUnloaded then
+    if isUnloaded then return end
+    if fullBrightEnabled then
         lighting.Brightness = 2
         lighting.ClockTime = 12
         lighting.GlobalShadows = false
@@ -318,18 +426,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Initial Scan
-for _, m in ipairs(Workspace:GetChildren()) do
-    if m:IsA("Model") then addNPC(m) end
-end
-
-Workspace.ChildAdded:Connect(function(m)
-    if m:IsA("Model") then task.wait(1) addNPC(m) end
-end)
-
-Rayfield:Notify({
-    Title = "LongTokai Hub",
-    Content = "Script Loaded Successfully with Rayfield UI!",
-    Duration = 5,
-    Image = 4483362458,
-})
+print("TOKAI HUB 🐧⚔️")
