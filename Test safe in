@@ -1,0 +1,335 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- [SERVICES]
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RS = game:GetService("ReplicatedStorage")
+local lighting = game:GetService("Lighting")
+
+-- [STATE VARIABLES]
+local localPlayer = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+local hitboxSize = 15 
+local activeNPCs = {}      
+local trackedParts = {}    
+local wallConnections = {} 
+
+local wallEnabled = false       
+local silentEnabled = false     
+local showHitbox = false        
+local fullBrightEnabled = false 
+local fastScanEnabled = false
+local isUnloaded = false        
+local patchOptions = { recoil = false, firemodes = false }
+
+local maleColor = Color3.fromRGB(0, 255, 0)
+local zombieColor = Color3.fromRGB(255, 0, 0)
+local originalLighting = {
+    Brightness = lighting.Brightness,
+    ClockTime = lighting.ClockTime,
+    FogEnd = lighting.FogEnd,
+    GlobalShadows = lighting.GlobalShadows,
+    Ambient = lighting.Ambient
+}
+
+------------------------------------------------------------------
+-- [[ LOGIC HỖ TRỢ: HITBOX & UTILS ]]
+------------------------------------------------------------------
+local ModifiedParts = {}
+local OriginalSizes = {}
+
+-- Metatable Hooking (Spoofing Size)
+local mt = getrawmetatable(game)
+local old_index = mt.__index
+setreadonly(mt, false)
+mt.__index = newcclosure(function(t, k)
+    if k == "Size" and ModifiedParts[t] then
+        return OriginalSizes[t] or Vector3.new(1, 1, 1)
+    end
+    return old_index(t, k)
+end)
+setreadonly(mt, true)
+
+local function UpdateHitboxes()
+    if not silentEnabled then
+        for part, _ in pairs(ModifiedParts) do
+            if part and part.Parent then
+                part.Size = OriginalSizes[part] or part.Size
+                part.Transparency = 1 
+                part.CanCollide = false
+            end
+            ModifiedParts[part] = nil
+        end
+        return
+    end
+
+    local sizeVal = hitboxSize or 4
+    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
+    local camPos = camera.CFrame.Position
+
+    for model, data in pairs(activeNPCs) do
+        local head = data.head
+        if not model.Parent then
+            ModifiedParts[head] = nil
+            continue
+        end
+
+        if head and head:IsA("BasePart") then
+            local offset = head.Position - camPos
+            if offset.Magnitude < 5 then continue end 
+
+            if not ModifiedParts[head] then
+                ModifiedParts[head] = true
+                OriginalSizes[head] = head.Size
+            end
+            
+            head.Size = expansion
+            head.CanCollide = true
+            head.Transparency = showHitbox and 0.4 or 1
+        end
+    end
+end
+
+local function isValidNPC(model)
+    local name = model.Name:lower()
+    if name == "male" then
+        for _, c in ipairs(model:GetChildren()) do
+            if c.Name:sub(1, 3) == "AI_" then return true end
+        end
+    end
+    return (name == "zombie" or name == "zombies" or name == "male")
+end
+
+local function createBoxForPart(part)
+    if not part or part:FindFirstChild("Wall_Box") then return end
+    local sphere = Instance.new("SphereHandleAdornment")
+    sphere.Name = "Wall_Box"
+    sphere.Radius = 1.2
+    sphere.Adornee = part
+    sphere.AlwaysOnTop = true 
+    sphere.ZIndex = 10
+    sphere.Transparency = 0.5
+    local model = part.Parent
+    sphere.Color3 = (model.Name:lower():find("zombie")) and zombieColor or maleColor
+    sphere.Parent = part
+    trackedParts[part] = true
+end
+
+local function destroyAllBoxes()
+    for part, _ in pairs(trackedParts) do
+        if part and part:FindFirstChild("Wall_Box") then pcall(function() part.Wall_Box:Destroy() end) end
+    end
+    trackedParts = {}
+end
+
+local function addNPC(model)
+    if activeNPCs[model] or not isValidNPC(model) then return end
+    local head = model:FindFirstChild("Head") or model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart")
+    if head then
+        activeNPCs[model] = { head = head }
+        if wallEnabled then createBoxForPart(head) end
+    end
+end
+
+local function patchWeapons()
+    local success, weaponsFolder = pcall(function() 
+        return RS.Shared.Configs.Weapon.Weapons_Player 
+    end)
+    if not success then return end
+
+    for _, platform in pairs(weaponsFolder:GetChildren()) do
+        for _, weapon in pairs(platform:GetChildren()) do
+            for _, child in pairs(weapon:GetChildren()) do
+                if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
+                    local s, receiver = pcall(require, child)
+                    if s and receiver.Config and receiver.Config.Tune then
+                        local tune = receiver.Config.Tune
+                        if patchOptions.recoil then
+                            tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.RecoilForce_Tap = 0
+                            tune.RecoilForce_Impulse = 0 tune.Recoil_Range = Vector2.zero
+                        end
+                        if patchOptions.firemodes then tune.Firemodes = {3, 2, 1, 0} end
+                    end
+                end
+            end
+        end
+    end
+end
+
+------------------------------------------------------------------
+-- [[ RAYFIELD UI SETUP ]]
+------------------------------------------------------------------
+local Window = Rayfield:CreateWindow({
+    Name = "longtokai hub",
+    Icon = "skull",
+    LoadingTitle = "🐧",
+    LoadingSubtitle = "by LONGTOKAI",
+    ConfigurationSaving = { Enabled = true, FolderName = "LongTokaiConfig", FileName = "Main" },
+    KeySystem = false
+})
+
+-- TABS
+local CombatTab = Window:CreateTab("Combat ⚔️", "crosshair")
+local VisualTab = Window:CreateTab("Visuals 👁️", "eye")
+local WeaponTab = Window:CreateTab("Weapons 🔫", "shield")
+local SettingTab = Window:CreateTab("Settings ⚙️", "settings")
+
+-- SECTION: COMBAT
+CombatTab:CreateSection("NPC Hitbox Expander")
+CombatTab:CreateToggle({
+    Name = "Silent Hitbox (All NPCs)",
+    CurrentValue = false,
+    Flag = "silent_hitbox",
+    Callback = function(Value) silentEnabled = Value end,
+})
+CombatTab:CreateToggle({
+    Name = "Show Hitbox Visual",
+    CurrentValue = false,
+    Flag = "show_hitbox",
+    Callback = function(Value) showHitbox = Value end,
+})
+CombatTab:CreateSlider({
+    Name = "Hitbox Size",
+    Range = {0, 30},
+    Increment = 1,
+    Suffix = "Studs",
+    CurrentValue = 15,
+    Flag = "hitbox_size",
+    Callback = function(Value) hitboxSize = Value end,
+})
+
+-- SECTION: VISUALS
+VisualTab:CreateSection("Esp & Lighting")
+VisualTab:CreateToggle({
+    Name = "ESP Sphere (Green:Male, Red:Zombie)",
+    CurrentValue = false,
+    Flag = "esp_sphere",
+    Callback = function(Value)
+        wallEnabled = Value
+        if wallEnabled then 
+            for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
+        else 
+            destroyAllBoxes() 
+        end
+    end,
+})
+VisualTab:CreateToggle({
+    Name = "FullBright",
+    CurrentValue = false,
+    Flag = "fullbright",
+    Callback = function(Value) fullBrightEnabled = Value end,
+})
+
+local noFogConnection
+VisualTab:CreateToggle({
+    Name = "Remove Fog",
+    CurrentValue = false,
+    Flag = "no_fog",
+    Callback = function(Value)
+        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            if Value then
+                atmosphere.Density = 0
+                noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function() atmosphere.Density = 0 end)
+            else
+                if noFogConnection then noFogConnection:Disconnect() end
+            end
+        end
+    end,
+})
+
+VisualTab:CreateSection("Scanning")
+VisualTab:CreateToggle({
+    Name = "Fast Auto Scan (Find New NPCs)",
+    CurrentValue = false,
+    Flag = "fast_scan",
+    Callback = function(Value) fastScanEnabled = Value end,
+})
+
+-- SECTION: WEAPONS
+WeaponTab:CreateSection("Weapon Modifications")
+WeaponTab:CreateToggle({
+    Name = "Anti-Recoil (No Shake)",
+    CurrentValue = false,
+    Flag = "anti_recoil",
+    Callback = function(Value) 
+        patchOptions.recoil = Value 
+        patchWeapons()
+    end,
+})
+WeaponTab:CreateToggle({
+    Name = "Unlock All Firemodes",
+    CurrentValue = false,
+    Flag = "unlock_fire",
+    Callback = function(Value) 
+        patchOptions.firemodes = Value 
+        patchWeapons()
+    end,
+})
+
+-- SECTION: SETTINGS
+SettingTab:CreateSection("Script Control")
+SettingTab:CreateButton({
+    Name = "Unload Script",
+    Callback = function()
+        isUnloaded = true
+        silentEnabled = false
+        UpdateHitboxes()
+        destroyAllBoxes()
+        if noFogConnection then noFogConnection:Disconnect() end
+        Rayfield:Destroy()
+    end,
+})
+
+------------------------------------------------------------------
+-- [[ SYSTEM LOOPS ]]
+------------------------------------------------------------------
+
+-- Hitbox Loop (1Hz)
+task.spawn(function()
+    while not isUnloaded do
+        pcall(UpdateHitboxes)
+        task.wait(1)
+    end
+end)
+
+-- Scanner Loop
+task.spawn(function()
+    while not isUnloaded do
+        if fastScanEnabled then
+            for _, m in ipairs(Workspace:GetChildren()) do
+                if m:IsA("Model") and not activeNPCs[m] then addNPC(m) end
+            end
+        end
+        task.wait(2)
+    end
+end)
+
+-- FullBright Loop
+RunService.RenderStepped:Connect(function()
+    if fullBrightEnabled and not isUnloaded then
+        lighting.Brightness = 2
+        lighting.ClockTime = 12
+        lighting.GlobalShadows = false
+        lighting.Ambient = Color3.new(1, 1, 1)
+    end
+end)
+
+-- Initial Scan
+for _, m in ipairs(Workspace:GetChildren()) do
+    if m:IsA("Model") then addNPC(m) end
+end
+
+Workspace.ChildAdded:Connect(function(m)
+    if m:IsA("Model") then task.wait(1) addNPC(m) end
+end)
+
+Rayfield:Notify({
+    Title = "LongTokai Hub",
+    Content = "Script Loaded Successfully with Rayfield UI!",
+    Duration = 5,
+    Image = 4483362458,
+})
