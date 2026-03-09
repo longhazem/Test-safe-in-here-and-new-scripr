@@ -1,0 +1,235 @@
+-- Multi-Executor Support
+
+local mousemoverel = mousemoverel or (Input and Input.MouseMoveRel) or mouse_moverel or function(x, y)
+
+    local vService = game:GetService("VirtualInputManager")
+
+    vService:SendMouseMoveEvent(x, y, game.Workspace.CurrentCamera)
+
+end
+
+
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+
+
+local Window = Rayfield:CreateWindow({
+
+   Name = "MERT SCRIPTS",
+
+   LoadingTitle = "Pure Combat Active",
+
+   LoadingSubtitle = "by Mert",
+
+   ConfigurationSaving = { Enabled = false }
+
+})
+
+
+
+local Settings = {
+
+    Aim = false,
+
+    LockPower = 0.8, -- Maksimum Kilitlenme Hızı
+
+    FovSize = 150,
+
+    ESP = false,
+
+    NoRecoil = false,
+
+    RecoilStrength = 10,
+
+    AlwaysDay = false
+
+}
+
+
+
+local LP = game.Players.LocalPlayer
+
+local Cam = workspace.CurrentCamera
+
+local UIS = game:GetService("UserInputService")
+
+local RunService = game:GetService("RunService")
+
+local Lighting = game:GetService("Lighting")
+
+
+
+-- --- FOV DAİRESİ ---
+
+local FovCircle = Drawing.new("Circle")
+
+FovCircle.Visible = true
+
+FovCircle.Color = Color3.fromRGB(0, 150, 255)
+
+FovCircle.Thickness = 1
+
+FovCircle.Radius = Settings.FovSize
+
+
+
+-- --- HIZLI NPC TARAMA SİSTEMİ ---
+
+local function GetEnemies()
+
+    local enemies = {}
+
+    for _, v in pairs(workspace:GetChildren()) do
+
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("Head") and v ~= LP.Character then
+
+            if not game.Players:GetPlayerFromCharacter(v) then
+
+                table.insert(enemies, v)
+
+            end
+
+        end
+
+    end
+
+    return enemies
+
+end
+
+
+
+-- --- ANA MOTOR ---
+
+RunService.RenderStepped:Connect(function()
+
+    FovCircle.Position = UIS:GetMouseLocation()
+
+    if Settings.AlwaysDay then Lighting.ClockTime = 12 end
+
+    
+
+    -- AYARLANABİLİR NO RECOIL
+
+    if Settings.NoRecoil and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+
+        mousemoverel(0, Settings.RecoilStrength)
+
+    end
+
+
+
+    local currentEnemies = GetEnemies()
+
+
+
+    -- MAVİ KARE ESP (0.8 Boyut)
+
+    for _, npc in pairs(currentEnemies) do
+
+        local head = npc.Head
+
+        if Settings.ESP then
+
+            if not head:FindFirstChild("MertBox") then
+
+                local b = Instance.new("BoxHandleAdornment", head)
+
+                b.Name = "MertBox"; b.Adornee = head; b.AlwaysOnTop = true
+
+                b.Size = Vector3.new(0.8, 0.8, 0.8); b.Color3 = Color3.fromRGB(0, 150, 255)
+
+                b.Transparency = 0.5; b.ZIndex = 10
+
+            end
+
+        else
+
+            if head:FindFirstChild("MertBox") then head.MertBox:Destroy() end
+
+        end
+
+    end
+
+
+
+    -- PRO AIMBOT (SAĞ TIK - ULTRA HIZLI)
+
+    if Settings.Aim and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+
+        local targetPos = nil
+
+        local minDist = Settings.FovSize
+
+        local mouseLoc = UIS:GetMouseLocation()
+
+        
+
+        for _, npc in pairs(currentEnemies) do
+
+            local pos, onScreen = Cam:WorldToViewportPoint(npc.Head.Position)
+
+            if onScreen then
+
+                local dist = (Vector2.new(pos.X, pos.Y) - mouseLoc).Magnitude
+
+                if dist < minDist then
+
+                    targetPos = Vector2.new(pos.X, pos.Y)
+
+                    minDist = dist
+
+                end
+
+            end
+
+        end
+
+        
+
+        if targetPos then
+
+            mousemoverel((targetPos.X - mouseLoc.X) * Settings.LockPower, (targetPos.Y - mouseLoc.Y) * Settings.LockPower)
+
+        end
+
+    end
+
+end)
+
+
+
+-- --- SEKMELER ---
+
+local CombatTab = Window:CreateTab("COMBAT VISUAL", 4483362458)
+
+local VisualTab = Window:CreateTab("VISUAL", 4483345998)
+
+
+
+-- COMBAT SEKMESİ
+
+CombatTab:CreateSection("Essential Combat")
+
+CombatTab:CreateToggle({Name = "Aimbot (Hızlı)", CurrentValue = false, Callback = function(v) Settings.Aim = v end})
+
+CombatTab:CreateSlider({Name = "Aimbot FOV Ayarı", Range = {10, 800}, Increment = 5, CurrentValue = 150, Callback = function(v) Settings.FovSize = v FovCircle.Radius = v end})
+
+
+
+CombatTab:CreateSection("Recoil Control")
+
+CombatTab:CreateToggle({Name = "No Recoil", CurrentValue = false, Callback = function(v) Settings.NoRecoil = v end})
+
+CombatTab:CreateSlider({Name = "Recoil Gücü (Aşağı Çekme)", Range = {0, 50}, Increment = 1, CurrentValue = 10, Callback = function(v) Settings.RecoilStrength = v end})
+
+
+
+-- VISUAL SEKMESİ
+
+VisualTab:CreateSection("Visual Enhancements")
+
+VisualTab:CreateToggle({Name = "NPC ESP (Mavi Kare)", CurrentValue = false, Callback = function(v) Settings.ESP = v end})
+
+VisualTab:CreateToggle({Name = "Always Day (Her Zaman Gündüz)", CurrentValue = false, Callback = function(v) Settings.AlwaysDay = v end})
