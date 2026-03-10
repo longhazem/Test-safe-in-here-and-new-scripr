@@ -1,0 +1,134 @@
+--[[ 
+    MINI FLY TOOL FOR BRM5
+    - Tự động tìm CharacterController của BRM5.
+    - UI có thể nắm đầu kéo đi mọi nơi trên màn hình.
+    - Hỗ trợ phím tắt 'T' để bật/tắt nhanh.
+]]
+
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Title = Instance.new("TextLabel")
+local ToggleBtn = Instance.new("TextButton")
+local SpeedInput = Instance.new("TextBox")
+local StatusLabel = Instance.new("TextLabel")
+
+-- Cài đặt mặc định
+local CharSettings = {
+    FlyEnabled = false,
+    FlySpeed = 50
+}
+
+-- 1. SETUP UI
+ScreenGui.Name = "MiniFlyGui"
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.ResetOnSpawn = false
+
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
+MainFrame.Size = UDim2.new(0, 150, 0, 180)
+MainFrame.Active = true
+MainFrame.Draggable = true -- Cho phép kéo thả
+
+Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.Text = "BRM5 MINI FLY"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 14
+Title.Font = Enum.Font.SourceSansBold
+
+ToggleBtn.Parent = MainFrame
+ToggleBtn.Position = UDim2.new(0.1, 0, 0.25, 0)
+ToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+ToggleBtn.Text = "FLY: OFF"
+ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleBtn.BorderSizePixel = 0
+
+SpeedInput.Parent = MainFrame
+SpeedInput.Position = UDim2.new(0.1, 0, 0.55, 0)
+SpeedInput.Size = UDim2.new(0.8, 0, 0, 30)
+SpeedInput.PlaceholderText = "Tốc độ (50)..."
+SpeedInput.Text = "50"
+SpeedInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SpeedInput.TextColor3 = Color3.new(1, 1, 1)
+
+StatusLabel.Parent = MainFrame
+StatusLabel.Position = UDim2.new(0, 0, 0.8, 0)
+StatusLabel.Size = UDim2.new(1, 0, 0, 30)
+StatusLabel.Text = "Phím tắt: T"
+StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextSize = 12
+
+-- 2. LOGIC FLY (HOOK BRM5)
+local function findModule()
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "Update") and rawget(v, "_exhaust") then
+            return v
+        end
+    end
+    return nil
+end
+
+local CharController = findModule()
+
+if CharController then
+    if not getgenv().OldUpdate then
+        getgenv().OldUpdate = CharController.Update
+    end
+
+    CharController.Update = function(self, ...)
+        getgenv().OldUpdate(self, ...)
+        if CharSettings.FlyEnabled then
+            local root = self._rootPart
+            local hum = self._humanoid
+            if root and hum then
+                local moveDir = hum.MoveDirection
+                if moveDir.Magnitude > 0 then
+                    root.Velocity = moveDir * CharSettings.FlySpeed
+                else
+                    root.Velocity = Vector3.new(0, 0, 0)
+                end
+                root.RotVelocity = Vector3.new(0, 0, 0)
+            end
+        end
+    end
+else
+    warn("Không tìm thấy CharacterController! Hãy thử lại khi nhân vật đã spawn.")
+end
+
+-- 3. XỬ LÝ SỰ KIỆN UI
+local function ToggleFly()
+    CharSettings.FlyEnabled = not CharSettings.FlyEnabled
+    if CharSettings.FlyEnabled then
+        ToggleBtn.Text = "FLY: ON"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
+    else
+        ToggleBtn.Text = "FLY: OFF"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        -- Trả lại vận tốc khi tắt
+        pcall(function() game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0) end)
+    end
+end
+
+ToggleBtn.MouseButton1Click:Connect(ToggleFly)
+
+SpeedInput.FocusLost:Connect(function()
+    local val = tonumber(SpeedInput.Text)
+    if val then
+        CharSettings.FlySpeed = val
+    else
+        SpeedInput.Text = tostring(CharSettings.FlySpeed)
+    end
+end)
+
+game:GetService("UserInputService").InputBegan:Connect(function(input, typing)
+    if typing then return end
+    if input.KeyCode == Enum.KeyCode.T then
+        ToggleFly()
+    end
+end)
