@@ -1,106 +1,132 @@
--- ════════════════════════════════════════════════════════════
--- 1. KHAI BÁO BIẾN TRẠNG THÁI (STATE)
--- ════════════════════════════════════════════════════════════
-local Players          = game:GetService("Players")
-local Workspace        = game:GetService("Workspace")
-local Camera           = Workspace.CurrentCamera
-local LP               = Players.LocalPlayer
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local activeNPCs       = {} -- Bảng lưu trữ NPC đang hoạt động [cite: 1]
-local silentAimPvE     = true  -- Bật Silent Aim cho NPC [cite: 3]
-local silentAimFOV     = 350   -- Phạm vi quét mục tiêu (pixel) [cite: 3]
-local silentAimPart    = "Head" -- Bộ phận nhắm tới (Head hoặc HumanoidRootPart) [cite: 3]
-local silentAimChance  = 100   -- Tỷ lệ trúng (0-100) [cite: 3]
-local silentAimHooked  = false
+-- Bảng màu của bạn
+local MyCustomTheme = {
+    TextColor = Color3.fromRGB(240, 240, 240),
+    Background = Color3.fromRGB(25, 25, 25),
+    Topbar = Color3.fromRGB(34, 34, 34),
+    Shadow = Color3.fromRGB(20, 20, 20),
+    NotificationBackground = Color3.fromRGB(20, 20, 20),
+    NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
+    TabBackground = Color3.fromRGB(80, 80, 80),
+    TabStroke = Color3.fromRGB(85, 85, 85),
+    TabBackgroundSelected = Color3.fromRGB(210, 210, 210),
+    TabTextColor = Color3.fromRGB(240, 240, 240),
+    SelectedTabTextColor = Color3.fromRGB(50, 50, 50),
+    ElementBackground = Color3.fromRGB(35, 35, 35),
+    ElementBackgroundHover = Color3.fromRGB(40, 40, 40),
+    SecondaryElementBackground = Color3.fromRGB(25, 25, 25),
+    ElementStroke = Color3.fromRGB(50, 50, 50),
+    SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
+    SliderBackground = Color3.fromRGB(50, 138, 220),
+    SliderProgress = Color3.fromRGB(50, 138, 220),
+    SliderStroke = Color3.fromRGB(58, 163, 255),
+    ToggleBackground = Color3.fromRGB(30, 30, 30),
+    ToggleEnabled = Color3.fromRGB(0, 146, 214),
+    ToggleDisabled = Color3.fromRGB(100, 100, 100),
+    ToggleEnabledStroke = Color3.fromRGB(0, 170, 255),
+    ToggleDisabledStroke = Color3.fromRGB(125, 125, 125),
+    ToggleEnabledOuterStroke = Color3.fromRGB(100, 100, 100),
+    ToggleDisabledOuterStroke = Color3.fromRGB(65, 65, 65),
+    DropdownSelected = Color3.fromRGB(40, 40, 40),
+    DropdownUnselected = Color3.fromRGB(30, 30, 30),
+    InputBackground = Color3.fromRGB(30, 30, 30),
+    InputStroke = Color3.fromRGB(65, 65, 65),
+    PlaceholderColor = Color3.fromRGB(178, 178, 178)
+}
 
--- ════════════════════════════════════════════════════════════
--- 2. HÀM TÌM MỤC TIÊU NPC GẦN TÂM MÀN HÌNH NHẤT
--- ════════════════════════════════════════════════════════════
-local function getSilentAimTarget()
-    local cam  = Camera
-    local vp   = cam.ViewportSize
-    local cx, cy = vp.X / 2, vp.Y / 2
-    local best, bestDist = nil, math.huge
+local Window = Rayfield:CreateWindow({
+   Name = "longtokai hub",
+   Icon = 0,
+   LoadingTitle = "🐧",
+   LoadingSubtitle = "by LONGTOKAI",
+   Theme = MyCustomTheme,
+   ConfigurationSaving = { Enabled = true, FileName = "Longtokai Hub" },
+   KeySystem = false
+})
 
-    if silentAimPvE then
-        -- Quét qua danh sách NPC đã được ESP nhận diện [cite: 34]
-        for m, d in pairs(activeNPCs) do
-            if not m.Parent then continue end
-            local part = m:FindFirstChild(silentAimPart) or d.head
-            if not part or not part.Parent then continue end
-            local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-            if not onScreen then continue end
-            local dist = math.sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
-            if dist < silentAimFOV and dist < bestDist then
-                bestDist = dist; best = part
+-- Tạo các Tab trước khi thêm Section
+local CombatTab = Window:CreateTab("combat⚔️")
+local VisibleTab = Window:CreateTab("visible")
+local WeaponsTab = Window:CreateTab("weapons")
+local CharTab = Window:CreateTab("character")
+local SettingsTab = Window:CreateTab("settings")
+
+-- Cấu hình mặc định
+local Config = {
+    ESP = false,
+    Hitbox = false,
+    HitboxSize = 4,
+    TeamCheck = true
+}
+
+-- Hệ thống ESP & Hitbox Logic
+local function ApplyHitbox(v)
+    if v and v:FindFirstChild("Head") then
+        v.Head.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+        v.Head.Transparency = 0.5
+        v.Head.CanCollide = false
+    end
+end
+
+-- RenderStepped để cập nhật liên tục
+game:GetService("RunService").RenderStepped:Connect(function()
+    for _, p in pairs(game:GetService("Players"):GetPlayers()) do
+        if p ~= game.Players.LocalPlayer and p.Character then
+            -- Hitbox logic
+            if Config.Hitbox then
+                ApplyHitbox(p.Character)
             end
-        end
-
-        -- Quét trực tiếp thư mục Bots của BRM5 để tránh bỏ sót [cite: 35]
-        local botsFolder = Workspace:FindFirstChild("Bots")
-        if botsFolder then
-            for _, bot in ipairs(botsFolder:GetChildren()) do
-                if not bot:IsA("Model") then continue end
-                local part = bot:FindFirstChild(silentAimPart) or bot:FindFirstChild("Head") or bot:FindFirstChildWhichIsA("BasePart")
-                if not part then continue end
-                local hum = bot:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health <= 0 then continue end
-                local sp, onScreen = cam:WorldToViewportPoint(part.Position)
-                if not onScreen then continue end
-                local dist = math.sqrt((sp.X - cx)^2 + (sp.Y - cy)^2)
-                if dist < silentAimFOV and dist < bestDist then
-                    bestDist = dist; best = part
+            
+            -- ESP Logic (BoxHighlight đơn giản)
+            local highlight = p.Character:FindFirstChild("TokaiESP")
+            if Config.ESP then
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "TokaiESP"
+                    highlight.FillTransparency = 1
+                    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+                    highlight.Parent = p.Character
                 end
+                highlight.Enabled = true
+            elseif highlight then
+                highlight.Enabled = false
             end
         end
     end
-    return best
-end
+end)
 
--- ════════════════════════════════════════════════════════════
--- 3. CƠ CHẾ BẺ HƯỚNG ĐẠN (HOOK GETMUZZLECFRMAME)
--- ════════════════════════════════════════════════════════════
-local function makeMuzzleHook(OldFn)
-    return hookfunction(OldFn, function(Self, Cast)
-        local Origin, Barrel, CamArg = OldFn(Self, Cast)
-        -- Chỉ bẻ hướng khi thực sự bắn (Cast == nil/false) [cite: 40]
-        if not Cast and Origin then
-            if silentAimChance < 100 and math.random(1, 100) > silentAimChance then
-                return Origin, Barrel, CamArg
-            end
-            local target = getSilentAimTarget()
-            if target and target.Parent then
-                -- Trả về vị trí nòng súng hướng thẳng vào mục tiêu [cite: 40]
-                return CFrame.new(Origin.Position, target.Position), Barrel, CamArg
-            end
-        end
-        return Origin, Barrel, CamArg
-    end)
-end
+-- ========== Giao diện Combat ==========
+CombatTab:CreateSection("Targeting")
+CombatTab:CreateToggle({
+   Name = "Hitbox Expander",
+   CurrentValue = false,
+   Callback = function(Value) Config.Hitbox = Value end,
+})
+CombatTab:CreateSlider({
+   Name = "Hitbox Size",
+   Range = {2, 15},
+   Increment = 1,
+   CurrentValue = 4,
+   Callback = function(Value) Config.HitboxSize = Value end,
+})
 
--- ════════════════════════════════════════════════════════════
--- 4. KÍCH HOẠT HỆ THỐNG
--- ════════════════════════════════════════════════════════════
-local function initSilentAimHook()
-    if silentAimHooked then return end
+-- ========== Giao diện Visible ==========
+VisibleTab:CreateSection("Visuals")
+VisibleTab:CreateToggle({
+   Name = "Enable ESP",
+   CurrentValue = false,
+   Callback = function(Value) Config.ESP = Value end,
+})
 
-    -- Tìm tất cả các hàm GetMuzzleCFrame trong bộ nhớ game 
-    local ok, fns = pcall(function()
-        return filtergc("function", { Name = "GetMuzzleCFrame" }, false)
-    end)
+-- ========== Các Section khác ==========
+WeaponsTab:CreateSection("Gun Mods")
+CharTab:CreateSection("Movement")
+SettingsTab:CreateSection("Global Settings")
 
-    if ok and type(fns) == "table" then
-        for _, fn in ipairs(fns) do
-            if type(fn) == "function" then
-                pcall(makeMuzzleHook, fn)
-            end
-        end
-        silentAimHooked = true
-        print("[SilentAim] Successfully hooked PvE.")
-    else
-        warn("[SilentAim] Failed to find functions or filtergc unavailable.")
-    end
-end
-
--- Chạy khởi tạo
-initSilentAimHook()
+Rayfield:Notify({
+   Title = "Success",
+   Content = "TOKAI HUB Loaded!",
+   Duration = 3,
+   Image = 4483362458,
+})
