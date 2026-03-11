@@ -7,13 +7,13 @@ local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
 local lighting = game:GetService("Lighting")
 
--- [ORIGINAL SETTINGS]
+-- [ SETTINGS & VARIABLES ]
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local hitboxSize = 15 
 local activeNPCs = {}      
 local trackedParts = {}    
-local originalSizes = {} -- Lưu kích thước gốc từ code hitbox mới 
+local originalSizes = {} -- Lưu kích thước gốc cho logic hitbox mới
 local wallConnections = {} 
 
 local wallEnabled = false       
@@ -26,12 +26,11 @@ local patchOptions = { recoil = false, firemodes = false }
 
 local maleColor = Color3.fromRGB(0, 255, 0)
 local zombieColor = Color3.fromRGB(255, 0, 0)
+local noFogConnection = nil
 
 ------------------------------------------------------------------
--- [[ NEW HITBOX LOGIC (INTEGRATED) ]]
+-- [[ NEW HITBOX LOGIC - INTEGRATED ]]
 ------------------------------------------------------------------
-
--- Hàm phóng to Hitbox 
 local function applySilentHitbox(model, root)
     if not originalSizes[model] then originalSizes[model] = root.Size end
     local TARGET_SIZE = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
@@ -40,7 +39,6 @@ local function applySilentHitbox(model, root)
     root.CanCollide = true
 end
 
--- Hàm khôi phục Hitbox 
 local function restoreOriginalSize(model)
     local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
     if root and originalSizes[model] then
@@ -51,7 +49,6 @@ local function restoreOriginalSize(model)
     originalSizes[model] = nil
 end
 
--- Vòng lặp cập nhật Hitbox liên tục
 task.spawn(function()
     while not isUnloaded do
         if silentEnabled then
@@ -70,7 +67,7 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------------
--- [[ CÁC LOGIC HỖ TRỢ ]]
+-- [[ HELPER FUNCTIONS ]]
 ------------------------------------------------------------------
 local originalLighting = {
     Brightness = lighting.Brightness,
@@ -88,7 +85,7 @@ local function isValidNPC(model)
     if not model or not model.Name then return false end
     local name = model.Name:lower()
     local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = (model.Name == "Male") -- Theo điều kiện code mới 
+    local isMale = (model.Name == "Male") 
 
     if isMale then
         local hasAI = false
@@ -166,21 +163,22 @@ end
 ------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
-   Name = "longtokai hub (Fixed Hitbox)",
+   Name = "longtokai hub (Bản Fix Lỗi)",
    Theme = "Default", 
    ConfigurationSaving = { Enabled = true, FolderName = "Longtokai Hub" }
 })
 
+-- COMBAT
 local CombatTab = Window:CreateTab("Combat ⚔️", nil)
 CombatTab:CreateToggle({
-   Name = "Silent Hitbox (Code mới)",
+   Name = "Silent Hitbox",
    CurrentValue = false,
    Flag = "SilentHitbox",
    Callback = function(Value) silentEnabled = Value end,
 })
 
 CombatTab:CreateToggle({
-   Name = "Show Hitbox",
+   Name = "Show Hitbox Box",
    CurrentValue = false,
    Flag = "ShowHitbox",
    Callback = function(Value) showHitbox = Value end,
@@ -188,7 +186,7 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
    Name = "Hitbox Size",
-   Range = {0, 25},
+   Range = {0, 20},
    Increment = 1,
    Suffix = "Studs",
    CurrentValue = 15,
@@ -196,6 +194,7 @@ CombatTab:CreateSlider({
    Callback = function(Value) hitboxSize = Value end,
 })
 
+-- VISIBLE
 local VisibleTab = Window:CreateTab("Visible 👁️", nil)
 VisibleTab:CreateToggle({
    Name = "ESP Sphere",
@@ -212,6 +211,13 @@ VisibleTab:CreateToggle({
 })
 
 VisibleTab:CreateToggle({
+   Name = "Fast Scan",
+   CurrentValue = false,
+   Flag = "FastScan",
+   Callback = function(Value) fastScanEnabled = Value end,
+})
+
+VisibleTab:CreateToggle({
    Name = "FullBright",
    CurrentValue = false,
    Flag = "FullBright",
@@ -221,6 +227,42 @@ VisibleTab:CreateToggle({
    end,
 })
 
+VisibleTab:CreateToggle({
+   Name = "No Fog",
+   CurrentValue = false,
+   Flag = "NoFog",
+   Callback = function(Value) 
+        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            if Value then
+                atmosphere.Density = 0
+                noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function() atmosphere.Density = 0 end)
+            else
+                if noFogConnection then noFogConnection:Disconnect(); noFogConnection = nil end
+                atmosphere.Density = 0.3 -- Hoặc giá trị mặc định của game
+            end
+        end
+        if Value then lighting.FogEnd = 100000 else lighting.FogEnd = originalLighting.FogEnd end
+   end,
+})
+
+-- WEAPONS
+local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
+WeaponsTab:CreateToggle({
+   Name = "Anti-Recoil",
+   CurrentValue = false,
+   Flag = "AntiRecoil",
+   Callback = function(Value) patchOptions.recoil = Value patchWeapons(patchOptions) end,
+})
+
+WeaponsTab:CreateToggle({
+   Name = "Unlock Firemodes",
+   CurrentValue = false,
+   Flag = "UnlockFiremodes",
+   Callback = function(Value) patchOptions.firemodes = Value patchWeapons(patchOptions) end,
+})
+
+-- SETTINGS
 local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
 SettingsTab:CreateButton({
    Name = "Unload Script",
@@ -229,6 +271,7 @@ SettingsTab:CreateButton({
        silentEnabled = false
        for m, _ in pairs(originalSizes) do restoreOriginalSize(m) end
        destroyAllBoxes()
+       if noFogConnection then noFogConnection:Disconnect() end
        Rayfield:Destroy() 
    end,
 })
@@ -248,6 +291,21 @@ table.insert(wallConnections, Workspace.DescendantAdded:Connect(function(m)
     if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
 end))
 
+task.spawn(function()
+    while not isUnloaded do
+        if fastScanEnabled then
+            local children = Workspace:GetDescendants()
+            for i, m in ipairs(children) do
+                if not isUnloaded and fastScanEnabled then
+                    if m:IsA("Model") and not activeNPCs[m] then if isValidNPC(m) then addNPC(m) end end
+                    if i % 100 == 0 then task.wait() end 
+                end
+            end
+        end
+        task.wait(0.5) 
+    end
+end)
+
 RunService.RenderStepped:Connect(function()
     if isUnloaded then return end
     if fullBrightEnabled then
@@ -257,5 +315,3 @@ RunService.RenderStepped:Connect(function()
         lighting.Ambient = Color3.new(1, 1, 1)
     end
 end)
-
-print("TOKAI HUB FIXED HITBOX LOADED 🐧⚔️")
