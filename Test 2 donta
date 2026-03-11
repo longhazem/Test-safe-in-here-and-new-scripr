@@ -1,0 +1,540 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local CustomTheme = {
+    TextColor = Color3.fromRGB(240, 240, 240),
+    Background = Color3.fromRGB(25, 25, 25),
+    Topbar = Color3.fromRGB(34, 34, 34),
+    Shadow = Color3.fromRGB(20, 20, 20),
+    NotificationBackground = Color3.fromRGB(20, 20, 20),
+    NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
+    TabBackground = Color3.fromRGB(80, 80, 80),
+    TabStroke = Color3.fromRGB(85, 85, 85),
+    TabBackgroundSelected = Color3.fromRGB(210, 210, 210),
+    TabTextColor = Color3.fromRGB(240, 240, 240),
+    SelectedTabTextColor = Color3.fromRGB(50, 50, 50),
+    ElementBackground = Color3.fromRGB(35, 35, 35),
+    ElementBackgroundHover = Color3.fromRGB(40, 40, 40),
+    SecondaryElementBackground = Color3.fromRGB(25, 25, 25),
+    ElementStroke = Color3.fromRGB(50, 50, 50),
+    SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
+    SliderBackground = Color3.fromRGB(50, 138, 220),
+    SliderProgress = Color3.fromRGB(50, 138, 220),
+    SliderStroke = Color3.fromRGB(58, 163, 255),
+    ToggleBackground = Color3.fromRGB(30, 30, 30),
+    ToggleEnabled = Color3.fromRGB(0, 146, 214),
+    ToggleDisabled = Color3.fromRGB(100, 100, 100),
+    ToggleEnabledStroke = Color3.fromRGB(0, 170, 255),
+    ToggleDisabledStroke = Color3.fromRGB(125, 125, 125),
+    ToggleEnabledOuterStroke = Color3.fromRGB(100, 100, 100),
+    ToggleDisabledOuterStroke = Color3.fromRGB(65, 65, 65),
+    DropdownSelected = Color3.fromRGB(40, 40, 40),
+    DropdownUnselected = Color3.fromRGB(30, 30, 30),
+    InputBackground = Color3.fromRGB(30, 30, 30),
+    InputStroke = Color3.fromRGB(65, 65, 65),
+    PlaceholderColor = Color3.fromRGB(178, 178, 178)
+}
+
+local Window = Rayfield:CreateWindow({
+    Name = "longtokai hub",
+    Icon = 0,
+    LoadingTitle = "🐧",
+    LoadingSubtitle = "by LONGTOKAI",
+    ShowText = "Rayfield",
+    Theme = CustomTheme,
+    ToggleUIKeybind = "K",
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = nil,
+        FileName = "Longtokai Hub"
+    },
+    Discord = { Enabled = false, Invite = "noinvitelink", RememberJoins = false },
+    KeySystem = false
+})
+
+local Config = {
+    ESPEnabled = false, ShowPlayers = true, ShowNPCs = true, ShowZombies = true, ShowTeammates = false, MaxESPDistance = 2000,
+    EnemyColor = Color3.fromRGB(255, 0, 0), TeamColor = Color3.fromRGB(0, 255, 0), ZombieColor = Color3.fromRGB(255, 165, 0), NPCColor = Color3.fromRGB(191, 191, 191),
+    SilentAimEnabled = false, ShowFOV = false, FOVRadius = 400, TargetPart = "Head", TeamCheck = true, WallCheck = true, Prediction = true, BulletDrop = true,
+    NoRecoil = false, NoSpread = false, UnlockModes = false, AutoReload = false, CustomRPM = false, RPMValue = 1000,
+    HitboxExpander = false, HitboxSize = 4,
+    WalkSpeedMult = 1, SprintSpeedMult = 1, InfStamina = false, NoMovementPenalty = false, FlyEnabled = false, FlySpeed = 50, Spinbot = false, SpinSpeed = 50,
+    AlwaysDay = false, NoFog = false, InstantInteract = false, InstantConsumables = false
+}
+
+local oldWarn = warn
+getgenv().warn = function(...)
+    local msg = table.concat({...}, " ")
+    if msg:find("ModuleScript") or msg:find("require") or msg:find("callback") or msg:find("destroyed") or msg:find("future") then return end
+    return oldWarn(...)
+end
+
+local _getgc_cache = { t = 0, v = nil }
+local function cached_getgc(all)
+    local now = tick()
+    if _getgc_cache.v and (now - _getgc_cache.t) < 5 then return _getgc_cache.v end
+    local ok, res = pcall(getgc, all)
+    res = ok and res or {}
+    _getgc_cache.v = res
+    _getgc_cache.t = now
+    return res
+end
+
+local function cached_search_gc(type_val, options)
+    local res, keys, source = {}, options.Keys, cached_getgc(true)
+    for _, v in pairs(source) do
+        if type(v) == type_val then
+            local match = true
+            if keys then
+                for _, k in ipairs(keys) do
+                    if type(v) ~= "table" or rawget(v, k) == nil then match = false break end
+                end
+            end
+            if match then table.insert(res, v) end
+        end
+    end
+    return res
+end
+
+local players = game:GetService("Players")
+local workspace = game:GetService("Workspace")
+local run_service = game:GetService("RunService")
+local user_input_service = game:GetService("UserInputService")
+local replicated_storage = game:GetService("ReplicatedStorage")
+local lighting = game:GetService("Lighting")
+local camera = workspace.CurrentCamera
+local local_player = players.LocalPlayer
+
+local function update_camera()
+    local newCam = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera") or camera
+    if newCam ~= camera then camera = newCam end
+end
+
+local Vector3_new, Vector2_new, CFrame_new = Vector3.new, Vector2.new, CFrame.new
+local tick = tick
+
+local player_actor_cache = {}
+local CachedPlayers = players:GetPlayers()
+local SimulatedActorCache = {}
+
+players.PlayerAdded:Connect(function(p) table.insert(CachedPlayers, p) end)
+players.PlayerRemoving:Connect(function(p) 
+    local idx = table.find(CachedPlayers, p)
+    if idx then table.remove(CachedPlayers, idx) end
+    SimulatedActorCache[p] = nil
+    player_actor_cache[p.UserId] = nil
+end)
+
+local client_service, replicator_service, inventory_service, vehicle_service
+local esp_objects, esp_pool, actor_list, actor_history, connections = {}, {}, {}, {}, {}
+local IsUnloading = false
+local CurrentSilentAimTarget = nil
+
+local function get_actor_from_player(p)
+    if not p then return nil end
+    local id, now = p.UserId, tick()
+    local ent = player_actor_cache[id]
+    if ent and (now - ent.t) < 0.5 then return ent.v end
+    
+    local actor = nil
+    if replicator_service then
+        local ok, res = pcall(function() return replicator_service:GetFromPlayer(p) end)
+        if ok then actor = res end
+    end
+    if not actor and p.Character then
+        local tp = players:GetPlayerFromCharacter(p.Character)
+        if tp and tp ~= p then actor = get_actor_from_player(tp) end
+        if not actor and type(getgenv().actor_list) == "table" then
+            for a in pairs(getgenv().actor_list) do
+                if a.Character == p.Character then actor = a break end
+            end
+        end
+    end
+    player_actor_cache[id] = { v = actor, t = now }
+    return actor
+end
+
+local function add_connection(conn) table.insert(connections, conn); return conn end
+
+local function findModule(name)
+    local RF = game:GetService("ReplicatedFirst")
+    for _, flux_name in ipairs({"Flux_client", "Flux/client", "Flux"}) do
+        local flux = RF:FindFirstChild(flux_name)
+        if flux then
+            local found = flux:FindFirstChild(name, true)
+            if found then return found end
+        end
+    end
+    local found = RF:FindFirstChild(name, true)
+    if found then return found end
+    local Packages = replicated_storage:FindFirstChild("Packages")
+    local RequireMod = Packages and Packages:FindFirstChild("require")
+    if RequireMod then
+        local success, Loader = pcall(require, RequireMod)
+        if success and Loader and Loader._modules and Loader._modules[name] then return Loader._modules[name] end
+    end
+    found = replicated_storage:FindFirstChild(name, true)
+    if found and found:IsA("ModuleScript") then return found end
+    return nil
+end
+
+local function GetServiceRobust(name, keys)
+    local mod = findModule(name)
+    if mod and mod.Parent then
+        local success, res = pcall(require, mod)
+        if success then return res end
+    end
+    local results = cached_search_gc("table", {Keys = keys})
+    for _, t in pairs(results) do if t[keys[1]] ~= nil then return t end end
+    return nil
+end
+
+task.spawn(function()
+    for i = 1, 10 do
+        if not replicator_service then replicator_service = GetServiceRobust("ReplicatorService", {"Actors", "_lastReplicate"}) end
+        if not client_service then client_service = GetServiceRobust("ClientService", {"Clients", "LocalClient"}) end
+        if not inventory_service then inventory_service = GetServiceRobust("InventoryService", {"Inventories", "Primary", "Load"}) end
+        if replicator_service and client_service and inventory_service then break end
+        task.wait(2)
+    end
+end)
+
+local function get_team(player)
+    if not player or not client_service then return nil end
+    if player == local_player then 
+        local client = client_service:GetClientFromName(player.Name)
+        return client and client.Squad
+    end
+    local actor = get_actor_from_player(player)
+    if actor then
+        if actor._Squad and (tick() - (actor._SquadTick or 0) < 5) then return actor._Squad end
+        local client = client_service:GetClientFromName(player.Name)
+        if client then
+            actor._Squad = client.Squad
+            actor._SquadTick = tick()
+            return actor._Squad
+        end
+    end
+    return nil
+end
+
+local function is_alive(actor)
+    if not actor or actor.Alive == false or actor.Downed == true then return false end
+    local model = actor.Character or actor.model
+    if not model or not model.Parent then return false end
+    local hp = model:GetAttribute("Health")
+    if typeof(hp) == "number" and hp <= 0 then return false end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health <= 0 then return false end
+    return true
+end
+
+local function update_lighting()
+    if Config.AlwaysDay then lighting.ClockTime = 12 end
+    if Config.NoFog then
+        lighting.FogEnd = 99999
+        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then atmosphere.Density = 0; atmosphere.Haze = 0 end
+        lighting.Brightness = 2
+        lighting.GlobalShadows = false
+    end
+end
+add_connection(lighting.Changed:Connect(function(prop)
+    if prop == "ClockTime" or prop == "FogEnd" or prop == "FogStart" then update_lighting() end
+end))
+
+local wall_params = RaycastParams.new()
+wall_params.FilterType = Enum.RaycastFilterType.Exclude
+wall_params.IgnoreWater = true
+local visibility_cache_v2 = {}
+local filter_table = {camera, workspace.CurrentCamera, nil, nil, nil}
+
+local function is_visible(targetPart)
+    if not targetPart then return false end
+    if not Config.WallCheck then return true end
+    local now = os.clock()
+    if visibility_cache_v2[targetPart] and (now - visibility_cache_v2[targetPart].last < 0.1) then return visibility_cache_v2[targetPart].result end
+    
+    local camPos = camera.CFrame.Position
+    local targetChar = targetPart.Parent
+    filter_table[3] = local_player.Character
+    filter_table[4] = targetChar
+    wall_params.FilterDescendantsInstances = filter_table
+    
+    local function check_ray(origin, targetPos)
+        local dir = targetPos - origin
+        local res = workspace:Raycast(origin, dir, wall_params)
+        if res then
+            local hit = res.Instance
+            if hit:IsDescendantOf(targetPart.Parent) or (targetChar and hit:IsDescendantOf(targetChar)) then return true end 
+            local is_penetrable = hit.Transparency > 0.5 or not hit.CanCollide
+            if is_penetrable then return check_ray(res.Position + dir.Unit * 0.05, targetPos) end
+            return false
+        end
+        return true
+    end
+
+    local is_vis = false
+    if check_ray(camPos, targetPart.Position) then is_vis = true
+    else
+        local firearm = getgenv().CurrentFirearm
+        if firearm and firearm.Equipped and firearm.GetMuzzleCFrame then
+            getgenv()._SilentAimInternal = true
+            local success, muzzle = pcall(function() return firearm:GetMuzzleCFrame() end)
+            getgenv()._SilentAimInternal = false
+            if success and muzzle and check_ray(muzzle.Position, targetPart.Position) then is_vis = true end
+        end
+    end
+    visibility_cache_v2[targetPart] = { last = now, result = is_vis }
+    return is_vis
+end
+
+local function ApplyGunMods(firearm)
+    if not firearm or not firearm._firearm or not firearm._firearm.Tune then return end
+    local tune = firearm._firearm.Tune
+    local caliber = firearm._caliber
+    
+    if not tune._Originals then
+        tune._Originals = {
+            Recoil_X = tune.Recoil_X, Recoil_Z = tune.Recoil_Z, Recoil_Camera = tune.Recoil_Camera,
+            Barrel_Spread = tune.Barrel_Spread, Spread = tune.Spread, RPM = tune.RPM, Firemodes = tune.Firemodes
+        }
+    end
+    
+    if Config.NoRecoil then
+        if tune.Recoil_X ~= nil then tune.Recoil_X = 0 end
+        if tune.Recoil_Z ~= nil then tune.Recoil_Z = 0 end
+        if tune.Recoil_Camera ~= nil then tune.Recoil_Camera = 0 end
+    else
+        tune.Recoil_X = tune._Originals.Recoil_X
+        tune.Recoil_Z = tune._Originals.Recoil_Z
+        tune.Recoil_Camera = tune._Originals.Recoil_Camera
+    end
+    
+    if Config.NoSpread then
+        if tune.Barrel_Spread ~= nil then tune.Barrel_Spread = 0 end
+        if tune.Spread ~= nil then tune.Spread = 0 end
+    else
+        tune.Barrel_Spread = tune._Originals.Barrel_Spread
+        if tune.Spread ~= nil then tune.Spread = tune._Originals.Spread end
+    end
+    
+    if Config.CustomRPM and tonumber(Config.RPMValue) then tune.RPM = tonumber(Config.RPMValue)
+    else tune.RPM = tune._Originals.RPM end
+
+    if Config.UnlockModes then tune.Firemodes = {1, 2, 3}
+    else
+        tune.Firemodes = tune._Originals.Firemodes
+        if firearm._item and firearm._item.MetaData and firearm._item.MetaData.Mode > #tune.Firemodes then firearm._item.MetaData.Mode = 1 end
+    end
+end
+
+local BulletService = nil
+local function get_bullet_service()
+    if BulletService then return BulletService end
+    local mod = findModule("BulletService")
+    if mod and typeof(mod) == "Instance" then
+        local s, res = pcall(require, mod)
+        if s then BulletService = res end
+    end
+    return BulletService
+end
+
+task.spawn(function()
+    local FirearmModule = findModule("FirearmInventory")
+    if FirearmModule then
+        local FirearmClass = require(FirearmModule)
+        if not getgenv().OldGetMuzzle then getgenv().OldGetMuzzle = FirearmClass.GetMuzzleCFrame end
+        if not getgenv().OldEquip then getgenv().OldEquip = FirearmClass.Equip end
+        
+        FirearmClass.GetMuzzleCFrame = function(self, ...)
+            local originCF, hitPoint, castResult = getgenv().OldGetMuzzle(self, ...)
+            if not getgenv()._SilentAimInternal and Config.SilentAimEnabled and originCF then
+                local targetPart = CurrentSilentAimTarget
+                if targetPart and targetPart.Parent then
+                    local targetPos = targetPart.Position
+                    if Config.Prediction or Config.BulletDrop then
+                        local bs = get_bullet_service()
+                        if bs and bs.GetInfo then
+                            local tune = self._firearm and self._firearm.Tune
+                            local mv = tune and bs:GetInfo(tune.CALIBER or tune.Caliber, tune.BARREL or tune.Barrel)
+                            if mv and mv > 0 then
+                                local t = (targetPos - originCF.Position).Magnitude / mv
+                                if Config.Prediction then
+                                    local p = players:GetPlayerFromCharacter(targetPart.Parent)
+                                    local actor = p and get_actor_from_player(p)
+                                    if actor and actor.Direction and actor.Direction.Magnitude > 0 then
+                                        targetPos = targetPos + (Vector3.new(actor.Direction.X, 0, actor.Direction.Y) * 60 * t)
+                                    end
+                                end
+                                if Config.BulletDrop then targetPos = targetPos + Vector3.new(0, 0.5 * 32.2 * (t ^ 2), 0) end
+                            end
+                        end
+                    end
+                    originCF = CFrame.lookAt(originCF.Position, targetPos)
+                end
+            end
+            return originCF, hitPoint, castResult
+        end
+
+        FirearmClass.Equip = function(self, ...)
+            getgenv().CurrentFirearm = self
+            ApplyGunMods(self)
+            return getgenv().OldEquip(self, ...)
+        end
+    end
+end)
+
+local function UpdateHitboxes()
+    if not Config.HitboxExpander then return end
+    local expansion = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
+    for _, p in ipairs(players:GetPlayers()) do
+        if p ~= local_player and p.Character then
+            local head = p.Character:FindFirstChild("Head")
+            if head and is_alive(get_actor_from_player(p)) then
+                if Config.TeamCheck and get_team(p) == get_team(local_player) then continue end
+                if head.Size ~= expansion then
+                    head.Size = expansion
+                    head.CanCollide = false
+                    head.Transparency = 0.4
+                end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while not IsUnloading do
+        pcall(UpdateHitboxes)
+        task.wait(1)
+    end
+end)
+
+local current_esp_folder = nil
+local function GetESPFolder()
+    if current_esp_folder and current_esp_folder.Parent then return current_esp_folder end
+    local f = Instance.new("Folder")
+    f.Name = "BRM5_ESP_Safe"
+    pcall(function() f.Parent = game:GetService("CoreGui") end)
+    current_esp_folder = f
+    return f
+end
+
+local function render_esp(id, actor, color, is_visible_toggle)
+    if not is_visible_toggle then if esp_objects[id] then esp_objects[id].Visible = false end return end
+    local root = actor.Character and (actor.Character:FindFirstChild("Head") or actor.Character.PrimaryPart)
+    if not root or not is_alive(actor) then if esp_objects[id] then esp_objects[id].Visible = false end return end
+
+    if not esp_objects[id] then
+        local box = Instance.new("BoxHandleAdornment")
+        box.AlwaysOnTop = true
+        box.ZIndex = 5
+        box.Transparency = 0
+        box.Parent = GetESPFolder()
+        esp_objects[id] = box
+    end
+    
+    local box = esp_objects[id]
+    box.Visible = true
+    box.Adornee = root
+    box.Size = root.Size * 1.2
+    box.Color3 = color
+end
+
+add_connection(run_service.RenderStepped:Connect(function()
+    update_camera()
+    local camPos = camera.CFrame.Position
+    local my_team = get_team(local_player)
+    
+    local sa_bestPart = nil
+    local sa_minFOVDist = math.huge
+    local sa_maxFOVSqr = (Config.FOVRadius or 400)^2
+    local sa_screenCenter = camera.ViewportSize / 2
+
+    for _, p in ipairs(players:GetPlayers()) do
+        if p == local_player then continue end
+        local actor = get_actor_from_player(p)
+        if not actor or not actor.Character then continue end
+        
+        local root = actor.Character.PrimaryPart
+        if root then
+            local is_team = (get_team(p) == my_team)
+            local color = is_team and Config.TeamColor or Config.EnemyColor
+            local visible = Config.ESPEnabled and (is_team and Config.ShowTeammates or Config.ShowPlayers)
+            render_esp(p.UserId, actor, color, visible)
+
+            if Config.SilentAimEnabled and is_alive(actor) and (not Config.TeamCheck or not is_team) then
+                local part = actor.Character:FindFirstChild(Config.TargetPart) or root
+                local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+                if onScreen then
+                    local fovDist = (Vector2.new(pos.X, pos.Y) - sa_screenCenter).Magnitude ^ 2
+                    if fovDist < sa_maxFOVSqr and fovDist < sa_minFOVDist and is_visible(part) then
+                        sa_minFOVDist = fovDist
+                        sa_bestPart = part
+                    end
+                end
+            end
+        end
+    end
+    CurrentSilentAimTarget = sa_bestPart
+end))
+
+
+-- ================= RAYFIELD UI ================= --
+
+local CombatTab = Window:CreateTab("combat⚔️", nil)
+local VisibleTab = Window:CreateTab("visible", nil)
+local WeaponsTab = Window:CreateTab("weapons", nil)
+local CharTab = Window:CreateTab("character", nil)
+local SettingsTab = Window:CreateTab("settings", nil)
+local CreateTab = Window:CreateTab("create", nil)
+
+CombatTab:CreateSection("Silent Aim")
+CombatTab:CreateToggle({Name = "Enable Silent Aim", CurrentValue = false, Flag = "SA_Enabled", Callback = function(v) Config.SilentAimEnabled = v end})
+CombatTab:CreateToggle({Name = "Wall Check", CurrentValue = true, Flag = "SA_WallCheck", Callback = function(v) Config.WallCheck = v end})
+CombatTab:CreateToggle({Name = "Team Check", CurrentValue = true, Flag = "SA_TeamCheck", Callback = function(v) Config.TeamCheck = v end})
+CombatTab:CreateToggle({Name = "Prediction", CurrentValue = true, Flag = "SA_Pred", Callback = function(v) Config.Prediction = v end})
+CombatTab:CreateToggle({Name = "Bullet Drop Comp", CurrentValue = true, Flag = "SA_Drop", Callback = function(v) Config.BulletDrop = v end})
+CombatTab:CreateSlider({Name = "FOV Radius", Range = {0, 1000}, Increment = 10, Suffix = "px", CurrentValue = 400, Flag = "SA_FOV", Callback = function(v) Config.FOVRadius = v end})
+CombatTab:CreateDropdown({Name = "Target Part", Options = {"Head", "UpperTorso", "HumanoidRootPart"}, CurrentOption = "Head", Flag = "SA_Target", Callback = function(v) Config.TargetPart = v end})
+
+CombatTab:CreateSection("Hitbox Expander")
+CombatTab:CreateToggle({Name = "Enable Hitbox", CurrentValue = false, Flag = "HB_Enabled", Callback = function(v) Config.HitboxExpander = v end})
+CombatTab:CreateSlider({Name = "Hitbox Size", Range = {2, 20}, Increment = 1, Suffix = " studs", CurrentValue = 4, Flag = "HB_Size", Callback = function(v) Config.HitboxSize = v end})
+
+
+VisibleTab:CreateSection("ESP Settings")
+VisibleTab:CreateToggle({Name = "Enable ESP", CurrentValue = false, Flag = "ESP_Master", Callback = function(v) Config.ESPEnabled = v end})
+VisibleTab:CreateToggle({Name = "Show Players", CurrentValue = true, Flag = "ESP_Plr", Callback = function(v) Config.ShowPlayers = v end})
+VisibleTab:CreateToggle({Name = "Show Teammates", CurrentValue = false, Flag = "ESP_Team", Callback = function(v) Config.ShowTeammates = v end})
+
+
+WeaponsTab:CreateSection("Gun Mods")
+WeaponsTab:CreateToggle({Name = "No Recoil", CurrentValue = false, Flag = "W_Recoil", Callback = function(v) Config.NoRecoil = v; if getgenv().CurrentFirearm then ApplyGunMods(getgenv().CurrentFirearm) end end})
+WeaponsTab:CreateToggle({Name = "No Spread", CurrentValue = false, Flag = "W_Spread", Callback = function(v) Config.NoSpread = v; if getgenv().CurrentFirearm then ApplyGunMods(getgenv().CurrentFirearm) end end})
+WeaponsTab:CreateToggle({Name = "Unlock Fire Modes", CurrentValue = false, Flag = "W_Modes", Callback = function(v) Config.UnlockModes = v; if getgenv().CurrentFirearm then ApplyGunMods(getgenv().CurrentFirearm) end end})
+WeaponsTab:CreateToggle({Name = "Custom RPM", CurrentValue = false, Flag = "W_CustomRPM", Callback = function(v) Config.CustomRPM = v; if getgenv().CurrentFirearm then ApplyGunMods(getgenv().CurrentFirearm) end end})
+WeaponsTab:CreateSlider({Name = "RPM Value", Range = {100, 2000}, Increment = 50, Suffix = " rpm", CurrentValue = 1000, Flag = "W_RPMVal", Callback = function(v) Config.RPMValue = v; if getgenv().CurrentFirearm then ApplyGunMods(getgenv().CurrentFirearm) end end})
+
+
+CharTab:CreateSection("Movement")
+CharTab:CreateToggle({Name = "Infinite Stamina", CurrentValue = false, Flag = "C_Stamina", Callback = function(v) Config.InfStamina = v end})
+CharTab:CreateToggle({Name = "No Move Penalty", CurrentValue = false, Flag = "C_Penalty", Callback = function(v) Config.NoMovementPenalty = v end})
+CharTab:CreateToggle({Name = "Spinbot", CurrentValue = false, Flag = "C_Spinbot", Callback = function(v) Config.Spinbot = v end})
+
+
+SettingsTab:CreateSection("Environment & Misc")
+SettingsTab:CreateToggle({Name = "Always Day", CurrentValue = false, Flag = "M_Day", Callback = function(v) Config.AlwaysDay = v; update_lighting() end})
+SettingsTab:CreateToggle({Name = "No Fog", CurrentValue = false, Flag = "M_Fog", Callback = function(v) Config.NoFog = v; update_lighting() end})
+SettingsTab:CreateToggle({Name = "Instant Interact", CurrentValue = false, Flag = "M_Interact", Callback = function(v) Config.InstantInteract = v end})
+SettingsTab:CreateToggle({Name = "Instant Consumables", CurrentValue = false, Flag = "M_Consumable", Callback = function(v) Config.InstantConsumables = v end})
+
+CreateTab:CreateSection("Script Controls")
+CreateTab:CreateButton({Name = "Unload Script", Callback = function() 
+    IsUnloading = true
+    Rayfield:Destroy()
+    if current_esp_folder then current_esp_folder:Destroy() end
+end})
+
+Rayfield:LoadConfiguration()
