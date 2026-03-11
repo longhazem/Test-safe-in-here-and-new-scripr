@@ -10,23 +10,28 @@ local lighting = game:GetService("Lighting")
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local hitboxSize = 15 
-local activeNPCs = {}      
-local trackedParts = {}    
-local wallConnections = {} 
-
 local wallEnabled = false       
 local silentEnabled = false     
 local showHitbox = false        
 local fullBrightEnabled = false 
 local isUnloaded = false     
 local fastScanEnabled = false   
+local teamCheck = false
 local patchOptions = { recoil = false, firemodes = false }
-
-local maleColor = Color3.fromRGB(0, 255, 0)
-local zombieColor = Color3.fromRGB(255, 0, 0)
 
 local ModifiedParts = {}
 local OriginalSizes = {}
+local trackedParts = {}
+
+local actor_list = {}
+for _, v in pairs(getgc(true)) do
+    if type(v) == "table" and rawget(v, "is_alive") and rawget(v, "get_actor_from_player") then
+        actor_list = v.actor_list or {}
+        get_actor_from_player = v.get_actor_from_player
+        is_alive = v.is_alive
+        get_team = v.get_team
+    end
+end
 
 local successHook, mt = pcall(function() return getrawmetatable(game) end)
 if successHook and mt then
@@ -41,90 +46,7 @@ if successHook and mt then
     setreadonly(mt, true)
 end
 
-local function UpdateHitboxes()
-    if not silentEnabled then
-        for part, _ in pairs(ModifiedParts) do
-            if part and part.Parent then
-                part.Size = OriginalSizes[part]
-                part.Transparency = 1
-                part.CanCollide = false
-            end
-            ModifiedParts[part] = nil
-        end
-        return
-    end
-
-    local sizeVal = math.clamp(hitboxSize or 4, 0, 15)
-    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
-    local camPos = camera.CFrame.Position
-
-    local function expand(head)
-        if not head or not head:IsA("BasePart") then return end
-        local offset = head.Position - camPos
-        local distSqr = offset:Dot(offset)
-        if distSqr < 25 then return end 
-        if distSqr > 1000000 then 
-            if ModifiedParts[head] then
-                head.Size = OriginalSizes[head]
-                head.Transparency = 1
-                head.CanCollide = false
-                ModifiedParts[head] = nil
-            end
-            return 
-        end
-        if not ModifiedParts[head] then
-            ModifiedParts[head] = true
-            OriginalSizes[head] = head.Size
-        end
-        if head.Size ~= expansion then head.Size = expansion end
-        head.CanCollide = true 
-        head.Transparency = showHitbox and 0.4 or 1
-    end
-
-    for model, data in pairs(activeNPCs) do
-        if model.Parent then
-            expand(data.head)
-        else
-            ModifiedParts[data.head] = nil
-        end
-    end
-end
-
-task.spawn(function()
-    while not isUnloaded do
-        pcall(UpdateHitboxes)
-        task.wait(1)
-    end
-end)
-
-local originalLighting = {
-    Brightness = lighting.Brightness,
-    ClockTime = lighting.ClockTime,
-    FogEnd = lighting.FogEnd,
-    GlobalShadows = lighting.GlobalShadows,
-    Ambient = lighting.Ambient
-}
-
-local function getRootPart(model)
-    return model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
-end
-
-local function isValidNPC(model)
-    if not model or not model.Name then return false end
-    local name = model.Name:lower()
-    local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = string.find(name, "male") ~= nil
-    if isMale then
-        local hasAI = false
-        for _, c in ipairs(model:GetChildren()) do
-            if type(c.Name) == "string" and c.Name:sub(1, 3) == "AI_" then hasAI = true break end
-        end
-        return hasAI
-    end
-    return isZombie
-end
-
-local function createBoxForPart(part)
+local function createBoxForPart(part, color)
     if not part or part:FindFirstChild("Wall_Box") then return end
     local sphere = Instance.new("SphereHandleAdornment")
     sphere.Name = "Wall_Box"
@@ -132,12 +54,8 @@ local function createBoxForPart(part)
     sphere.Adornee = part
     sphere.AlwaysOnTop = true 
     sphere.ZIndex = 10
-    sphere.Transparency = 0.1
-    local model = part.Parent
-    if model then
-        local name = model.Name:lower()
-        sphere.Color3 = string.find(name, "zombie") and zombieColor or maleColor
-    end
+    sphere.Transparency = 0.3
+    sphere.Color3 = color or Color3.fromRGB(255, 0, 0)
     sphere.Parent = part
     trackedParts[part] = true
 end
@@ -149,20 +67,96 @@ local function destroyAllBoxes()
     trackedParts = {}
 end
 
-local function addNPC(model)
-    if activeNPCs[model] or not isValidNPC(model) then return end
-    local head = model:FindFirstChild("Head")
-    local root = getRootPart(model)
-    if not (head or root) then return end
-    activeNPCs[model] = { head = head or root, root = root }
-    if wallEnabled then createBoxForPart(head or root) end
+local function UpdateHitboxes()
+    if not silentEnabled then
+        for part, _ in pairs(ModifiedParts) do
+            if part and part.Parent then
+                part.Size = OriginalSizes[part]
+                part.Transparency = 0
+                part.CanCollide = true
+            end
+            ModifiedParts[part] = nil
+        end
+        return
+    end
+
+    local sizeVal = math.clamp(hitboxSize, 0, 15)
+    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
+    local camPos = camera.CFrame.Position
+    local myTeam = get_team and get_team(localPlayer)
+
+    local function expand(actor)
+        if not actor or not is_alive(actor) then return end
+        local cache = actor._CachedParts
+        local head = cache and cache.Head
+        if not head then return end
+
+        local shouldRestore = false
+        if teamCheck and actor.Owner and get_team and get_team(actor.Owner) == myTeam then
+            shouldRestore = true
+        end
+
+        if shouldRestore then
+            if ModifiedParts[head] then
+                head.Size = OriginalSizes[head]
+                head.Transparency = 0
+                head.CanCollide = true
+                ModifiedParts[head] = nil
+            end
+            return
+        end
+
+        if actor.Owner == localPlayer then return end
+        
+        local offset = head.Position - camPos
+        local distSqr = offset:Dot(offset)
+        if distSqr < 25 or distSqr > 1000000 then 
+            if ModifiedParts[head] then
+                head.Size = OriginalSizes[head]
+                head.Transparency = 0
+                head.CanCollide = true
+                ModifiedParts[head] = nil
+            end
+            return 
+        end
+
+        if not ModifiedParts[head] then
+            ModifiedParts[head] = true
+            OriginalSizes[head] = head.Size
+        end
+        
+        head.Size = expansion
+        head.CanCollide = false
+        head.Transparency = showHitbox and 0.4 or 1
+
+        if wallEnabled then
+            createBoxForPart(head, (actor.Owner and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)))
+        end
+    end
+
+    if not wallEnabled then destroyAllBoxes() end
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        local actor = get_actor_from_player and get_actor_from_player(plr)
+        if actor then expand(actor) end
+    end
+    if actor_list then
+        for actor in pairs(actor_list) do expand(actor) end
+    end
 end
+
+task.spawn(function()
+    while not isUnloaded do
+        pcall(UpdateHitboxes)
+        task.wait(1)
+    end
+end)
 
 local function patchWeapons(options)
     local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
     if not weaponsFolder then return end
     for _, platform in pairs(weaponsFolder:GetChildren()) do
-       if platform.Name:match("^Platform_") then
+        if platform.Name:match("^Platform_") then
             for _, weapon in pairs(platform:GetChildren()) do
                 for _, child in pairs(weapon:GetChildren()) do
                     if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
@@ -185,22 +179,61 @@ local function patchWeapons(options)
 end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local CustomTheme = {
+	TextColor = Color3.fromRGB(240, 240, 240),
+	Background = Color3.fromRGB(25, 25, 25),
+	Topbar = Color3.fromRGB(34, 34, 34),
+	Shadow = Color3.fromRGB(20, 20, 20),
+	NotificationBackground = Color3.fromRGB(20, 20, 20),
+	NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
+	TabBackground = Color3.fromRGB(80, 80, 80),
+	TabStroke = Color3.fromRGB(85, 85, 85),
+	TabBackgroundSelected = Color3.fromRGB(210, 210, 210),
+	TabTextColor = Color3.fromRGB(240, 240, 240),
+	SelectedTabTextColor = Color3.fromRGB(50, 50, 50),
+	ElementBackground = Color3.fromRGB(35, 35, 35),
+	ElementBackgroundHover = Color3.fromRGB(40, 40, 40),
+	SecondaryElementBackground = Color3.fromRGB(25, 25, 25),
+	ElementStroke = Color3.fromRGB(50, 50, 50),
+	SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
+	SliderBackground = Color3.fromRGB(50, 138, 220),
+	SliderProgress = Color3.fromRGB(50, 138, 220),
+	SliderStroke = Color3.fromRGB(58, 163, 255),
+	ToggleBackground = Color3.fromRGB(30, 30, 30),
+	ToggleEnabled = Color3.fromRGB(0, 146, 214),
+	ToggleDisabled = Color3.fromRGB(100, 100, 100),
+	ToggleEnabledStroke = Color3.fromRGB(0, 170, 255),
+	ToggleDisabledStroke = Color3.fromRGB(125, 125, 125),
+	ToggleEnabledOuterStroke = Color3.fromRGB(100, 100, 100),
+	ToggleDisabledOuterStroke = Color3.fromRGB(65, 65, 65),
+	DropdownSelected = Color3.fromRGB(40, 40, 40),
+	DropdownUnselected = Color3.fromRGB(30, 30, 30),
+	InputBackground = Color3.fromRGB(30, 30, 30),
+	InputStroke = Color3.fromRGB(65, 65, 65),
+	PlaceholderColor = Color3.fromRGB(178, 178, 178)
+}
 
 local Window = Rayfield:CreateWindow({
    Name = "longtokai hub",
    Icon = 0, 
    LoadingTitle = "🐧",
    LoadingSubtitle = "by LONGTOKAI",
-   Theme = "Default", 
+   Theme = CustomTheme, 
    ConfigurationSaving = { Enabled = true, FolderName = nil, FileName = "Longtokai Hub" }
 })
 
 local CombatTab = Window:CreateTab("Combat ⚔️", nil)
 CombatTab:CreateToggle({
-   Name = "Silent Hitbox (All NPCs)",
+   Name = "Silent Hitbox (Actors)",
    CurrentValue = false,
    Flag = "SilentHitbox",
    Callback = function(Value) silentEnabled = Value end,
+})
+CombatTab:CreateToggle({
+   Name = "Team Check",
+   CurrentValue = false,
+   Flag = "TeamCheck",
+   Callback = function(Value) teamCheck = Value end,
 })
 CombatTab:CreateToggle({
    Name = "Show Hitbox",
@@ -223,24 +256,29 @@ VisibleTab:CreateToggle({
    Name = "ESP Sphere",
    CurrentValue = false,
    Flag = "ESPSphere",
-   Callback = function(Value) 
-       wallEnabled = Value
-       if wallEnabled then for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end else destroyAllBoxes() end 
-   end,
-})
-VisibleTab:CreateToggle({
-   Name = "Fast Scan",
-   CurrentValue = false,
-   Flag = "FastScan",
-   Callback = function(Value) fastScanEnabled = Value end,
+   Callback = function(Value) wallEnabled = Value if not Value then destroyAllBoxes() end end,
 })
 VisibleTab:CreateToggle({
    Name = "FullBright",
    CurrentValue = false,
    Flag = "FullBright",
+   Callback = function(Value) fullBrightEnabled = Value end,
+})
+local noFogConnection = nil
+VisibleTab:CreateToggle({
+   Name = "No Fog",
+   CurrentValue = false,
+   Flag = "NoFog",
    Callback = function(Value) 
-       fullBrightEnabled = Value
-       if not Value then for p, val in pairs(originalLighting) do lighting[p] = val end end
+        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            if Value then
+                atmosphere.Density = 0
+                noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function() atmosphere.Density = 0 end)
+            else
+                if noFogConnection then noFogConnection:Disconnect(); noFogConnection = nil end
+            end
+        end
    end,
 })
 
@@ -264,36 +302,10 @@ SettingsTab:CreateButton({
        silentEnabled = false
        UpdateHitboxes()
        destroyAllBoxes()
+       if noFogConnection then noFogConnection:Disconnect() end
        Rayfield:Destroy() 
    end,
 })
-
-task.spawn(function()
-    local all = Workspace:GetDescendants()
-    for i, m in ipairs(all) do
-        if m:IsA("Model") and isValidNPC(m) then addNPC(m) end
-        if i % 50 == 0 then task.wait() end
-    end
-end)
-
-table.insert(wallConnections, Workspace.DescendantAdded:Connect(function(m)
-    if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
-end))
-
-task.spawn(function()
-    while not isUnloaded do
-        if fastScanEnabled then
-            local children = Workspace:GetDescendants()
-            for i, m in ipairs(children) do
-                if not isUnloaded and fastScanEnabled then
-                    if m:IsA("Model") and not activeNPCs[m] then if isValidNPC(m) then addNPC(m) end end
-                    if i % 100 == 0 then task.wait() end 
-                end
-            end
-        end
-        task.wait(2) 
-    end
-end)
 
 RunService.RenderStepped:Connect(function()
     if isUnloaded then return end
