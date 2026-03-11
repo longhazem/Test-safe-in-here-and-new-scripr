@@ -7,36 +7,38 @@ local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
 local lighting = game:GetService("Lighting")
 
+-- [ORIGINAL LOGIC]
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local hitboxSize = 15 
+local activeNPCs = {}      
+local trackedParts = {}    
+local wallConnections = {} 
+
 local wallEnabled = false       
 local silentEnabled = false     
 local showHitbox = false        
 local fullBrightEnabled = false 
+
 local isUnloaded = false     
 local fastScanEnabled = false   
-local teamCheck = false
 local patchOptions = { recoil = false, firemodes = false }
 
+local maleColor = Color3.fromRGB(0, 255, 0)
+local zombieColor = Color3.fromRGB(255, 0, 0)
+
+------------------------------------------------------------------
+-- [[ HOOKS & SPOOFING (Hitbox Expander) ]]
+------------------------------------------------------------------
 local ModifiedParts = {}
 local OriginalSizes = {}
-local trackedParts = {}
 
-local actor_list = {}
-for _, v in pairs(getgc(true)) do
-    if type(v) == "table" and rawget(v, "is_alive") and rawget(v, "get_actor_from_player") then
-        actor_list = v.actor_list or {}
-        get_actor_from_player = v.get_actor_from_player
-        is_alive = v.is_alive
-        get_team = v.get_team
-    end
-end
-
+-- Bọc pcall để chống crash nếu Executor đang bị lỗi hook do Roblox update
 local successHook, mt = pcall(function() return getrawmetatable(game) end)
 if successHook and mt then
     local old_index = mt.__index
     setreadonly(mt, false)
+
     mt.__index = newcclosure(function(t, k)
         if k == "Size" and ModifiedParts[t] then
             return OriginalSizes[t] or Vector3.new(1, 1, 1)
@@ -44,9 +46,107 @@ if successHook and mt then
         return old_index(t, k)
     end)
     setreadonly(mt, true)
+else
+    warn("Executor không hỗ trợ getrawmetatable hiện tại. Hitbox có thể bị phát hiện.")
 end
 
-local function createBoxForPart(part, color)
+local function UpdateHitboxes()
+    if not silentEnabled then
+        for part, _ in pairs(ModifiedParts) do
+            if part and part.Parent then
+                part.Size = OriginalSizes[part] or part.Size
+                part.Transparency = 1 
+                part.CanCollide = false
+            end
+            ModifiedParts[part] = nil
+        end
+        return
+    end
+
+    local sizeVal = hitboxSize or 4
+    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
+    local camPos = camera.CFrame.Position
+
+    for model, data in pairs(activeNPCs) do
+        local head = data.head 
+        
+        if not model.Parent then
+            if head and ModifiedParts[head] then
+                ModifiedParts[head] = nil
+            end
+            continue
+        end
+
+        if head and head:IsA("BasePart") then
+            local offset = head.Position - camPos
+            local distSqr = offset:Dot(offset)
+            
+            if distSqr < 25 then continue end 
+
+            if distSqr > 1000000 then 
+                if ModifiedParts[head] then
+                    head.Size = OriginalSizes[head]
+                    head.Transparency = 1
+                    head.CanCollide = false
+                    ModifiedParts[head] = nil
+                end
+                continue 
+            end
+
+            if not ModifiedParts[head] then
+                ModifiedParts[head] = true
+                OriginalSizes[head] = head.Size
+            end
+           
+            if head.Size ~= expansion then head.Size = expansion end
+            if not head.CanCollide then head.CanCollide = true end 
+            
+            head.Transparency = showHitbox and 0.4 or 1
+        end
+    end
+end
+
+task.spawn(function()
+    while not isUnloaded do
+        pcall(UpdateHitboxes)
+        task.wait(1)
+    end
+end)
+
+------------------------------------------------------------------
+-- [CÁC LOGIC CÒN LẠI CỦA FILE GỐC]
+------------------------------------------------------------------
+local originalLighting = {
+    Brightness = lighting.Brightness,
+    ClockTime = lighting.ClockTime,
+    FogEnd = lighting.FogEnd,
+    GlobalShadows = lighting.GlobalShadows,
+    Ambient = lighting.Ambient
+}
+
+local function getRootPart(model)
+    return model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
+end
+
+-- ĐÃ FIX: Cho phép tìm tên linh hoạt hơn (chứa chữ zombie thay vì phải giống y hệt 100%)
+local function isValidNPC(model)
+    if not model or not model.Name then return false end
+    local name = model.Name:lower()
+    
+    local isZombie = string.find(name, "zombie") ~= nil
+    local isMale = string.find(name, "male") ~= nil
+
+    if isMale then
+        local hasAI = false
+        for _, c in ipairs(model:GetChildren()) do
+            if type(c.Name) == "string" and c.Name:sub(1, 3) == "AI_" then hasAI = true break end
+        end
+        return hasAI
+    end
+    return isZombie
+end
+
+local function createBoxForPart(part)
     if not part or part:FindFirstChild("Wall_Box") then return end
     local sphere = Instance.new("SphereHandleAdornment")
     sphere.Name = "Wall_Box"
@@ -54,8 +154,13 @@ local function createBoxForPart(part, color)
     sphere.Adornee = part
     sphere.AlwaysOnTop = true 
     sphere.ZIndex = 10
-    sphere.Transparency = 0.3
-    sphere.Color3 = color or Color3.fromRGB(255, 0, 0)
+    sphere.Transparency = 0.1
+    local model = part.Parent
+    if model then
+        local name = model.Name:lower()
+        -- FIX MÀU: Nhận diện màu chuẩn hơn
+        sphere.Color3 = string.find(name, "zombie") and zombieColor or maleColor
+    end
     sphere.Parent = part
     trackedParts[part] = true
 end
@@ -67,96 +172,21 @@ local function destroyAllBoxes()
     trackedParts = {}
 end
 
-local function UpdateHitboxes()
-    if not silentEnabled then
-        for part, _ in pairs(ModifiedParts) do
-            if part and part.Parent then
-                part.Size = OriginalSizes[part]
-                part.Transparency = 0
-                part.CanCollide = true
-            end
-            ModifiedParts[part] = nil
-        end
-        return
-    end
-
-    local sizeVal = math.clamp(hitboxSize, 0, 15)
-    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
-    local camPos = camera.CFrame.Position
-    local myTeam = get_team and get_team(localPlayer)
-
-    local function expand(actor)
-        if not actor or not is_alive(actor) then return end
-        local cache = actor._CachedParts
-        local head = cache and cache.Head
-        if not head then return end
-
-        local shouldRestore = false
-        if teamCheck and actor.Owner and get_team and get_team(actor.Owner) == myTeam then
-            shouldRestore = true
-        end
-
-        if shouldRestore then
-            if ModifiedParts[head] then
-                head.Size = OriginalSizes[head]
-                head.Transparency = 0
-                head.CanCollide = true
-                ModifiedParts[head] = nil
-            end
-            return
-        end
-
-        if actor.Owner == localPlayer then return end
-        
-        local offset = head.Position - camPos
-        local distSqr = offset:Dot(offset)
-        if distSqr < 25 or distSqr > 1000000 then 
-            if ModifiedParts[head] then
-                head.Size = OriginalSizes[head]
-                head.Transparency = 0
-                head.CanCollide = true
-                ModifiedParts[head] = nil
-            end
-            return 
-        end
-
-        if not ModifiedParts[head] then
-            ModifiedParts[head] = true
-            OriginalSizes[head] = head.Size
-        end
-        
-        head.Size = expansion
-        head.CanCollide = false
-        head.Transparency = showHitbox and 0.4 or 1
-
-        if wallEnabled then
-            createBoxForPart(head, (actor.Owner and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)))
-        end
-    end
-
-    if not wallEnabled then destroyAllBoxes() end
-
-    for _, plr in pairs(Players:GetPlayers()) do
-        local actor = get_actor_from_player and get_actor_from_player(plr)
-        if actor then expand(actor) end
-    end
-    if actor_list then
-        for actor in pairs(actor_list) do expand(actor) end
-    end
+local function addNPC(model)
+    if activeNPCs[model] or not isValidNPC(model) then return end
+    local head = model:FindFirstChild("Head")
+    local root = getRootPart(model)
+    if not (head or root) then return end
+    
+    activeNPCs[model] = { head = head or root, root = root }
+    if wallEnabled then createBoxForPart(head or root) end
 end
-
-task.spawn(function()
-    while not isUnloaded do
-        pcall(UpdateHitboxes)
-        task.wait(1)
-    end
-end)
 
 local function patchWeapons(options)
     local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
     if not weaponsFolder then return end
     for _, platform in pairs(weaponsFolder:GetChildren()) do
-        if platform.Name:match("^Platform_") then
+       if platform.Name:match("^Platform_") then
             for _, weapon in pairs(platform:GetChildren()) do
                 for _, child in pairs(weapon:GetChildren()) do
                     if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
@@ -178,7 +208,11 @@ local function patchWeapons(options)
     end
 end
 
+------------------------------------------------------------------
+-- [[ RAYFIELD UI LIBRARY ]]
+------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
 local CustomTheme = {
 	TextColor = Color3.fromRGB(240, 240, 240),
 	Background = Color3.fromRGB(25, 25, 25),
@@ -214,36 +248,57 @@ local CustomTheme = {
 }
 
 local Window = Rayfield:CreateWindow({
-   Name = "longtokai hub",
+   Name = "longtokai hub (Fixed)",
    Icon = 0, 
    LoadingTitle = "🐧",
-   LoadingSubtitle = "by LONGTOKAI",
+   LoadingSubtitle = "by LONGTOKAI - Fix Update",
+   ShowText = "Rayfield", 
    Theme = CustomTheme, 
-   ConfigurationSaving = { Enabled = true, FolderName = nil, FileName = "Longtokai Hub" }
+   ToggleUIKeybind = "K", 
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, 
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, 
+      FileName = "Longtokai Hub"
+   },
+
+   Discord = {
+      Enabled = false, 
+      Invite = "noinvitelink", 
+      RememberJoins = false 
+   },
+
+   KeySystem = false
 })
 
+------------------------------------------------------------------
+-- [ TABS & SECTIONS ]
+------------------------------------------------------------------
+
+-- COMBAT TAB
 local CombatTab = Window:CreateTab("Combat ⚔️", nil)
+local CombatSection = CombatTab:CreateSection("Hitbox & Aim")
+
 CombatTab:CreateToggle({
-   Name = "Silent Hitbox (Actors)",
+   Name = "Silent Hitbox (All NPCs)",
    CurrentValue = false,
    Flag = "SilentHitbox",
    Callback = function(Value) silentEnabled = Value end,
 })
-CombatTab:CreateToggle({
-   Name = "Team Check",
-   CurrentValue = false,
-   Flag = "TeamCheck",
-   Callback = function(Value) teamCheck = Value end,
-})
+
 CombatTab:CreateToggle({
    Name = "Show Hitbox",
    CurrentValue = false,
    Flag = "ShowHitbox",
    Callback = function(Value) showHitbox = Value end,
 })
+
 CombatTab:CreateSlider({
    Name = "Hitbox Size",
-   Range = {0, 15},
+   Range = {0, 20},
    Increment = 1,
    Suffix = "Studs",
    CurrentValue = 15,
@@ -251,19 +306,43 @@ CombatTab:CreateSlider({
    Callback = function(Value) hitboxSize = Value end,
 })
 
+
+-- VISIBLE TAB
 local VisibleTab = Window:CreateTab("Visible 👁️", nil)
+local VisibleSection = VisibleTab:CreateSection("ESP & World")
+
 VisibleTab:CreateToggle({
-   Name = "ESP Sphere",
+   Name = "ESP Sphere (M:G, Z:R)",
    CurrentValue = false,
    Flag = "ESPSphere",
-   Callback = function(Value) wallEnabled = Value if not Value then destroyAllBoxes() end end,
+   Callback = function(Value) 
+       wallEnabled = Value
+       if wallEnabled then 
+           for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
+       else 
+           destroyAllBoxes() 
+       end 
+   end,
 })
+
+-- FIX: Thay đổi trạng thái nút cho rõ ràng
+VisibleTab:CreateToggle({
+   Name = "Auto Fast Scan (Bật nếu quái spawn liên tục)",
+   CurrentValue = false,
+   Flag = "FastScan",
+   Callback = function(Value) fastScanEnabled = Value end,
+})
+
 VisibleTab:CreateToggle({
    Name = "FullBright",
    CurrentValue = false,
    Flag = "FullBright",
-   Callback = function(Value) fullBrightEnabled = Value end,
+   Callback = function(Value) 
+       fullBrightEnabled = Value
+       if not Value then for p, val in pairs(originalLighting) do lighting[p] = val end end
+   end,
 })
+
 local noFogConnection = nil
 VisibleTab:CreateToggle({
    Name = "No Fog",
@@ -282,30 +361,73 @@ VisibleTab:CreateToggle({
    end,
 })
 
+
+-- WEAPONS TAB
 local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
+local WeaponsSection = WeaponsTab:CreateSection("Gun Mods")
+
 WeaponsTab:CreateToggle({
    Name = "Anti-Recoil",
    CurrentValue = false,
+   Flag = "AntiRecoil",
    Callback = function(Value) patchOptions.recoil = Value patchWeapons(patchOptions) end,
 })
+
 WeaponsTab:CreateToggle({
    Name = "Unlock Firemodes",
    CurrentValue = false,
+   Flag = "UnlockFiremodes",
    Callback = function(Value) patchOptions.firemodes = Value patchWeapons(patchOptions) end,
 })
 
+
+-- SETTINGS TAB
 local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
+local SettingsSection = SettingsTab:CreateSection("System")
+
 SettingsTab:CreateButton({
    Name = "Unload Script",
    Callback = function()
        isUnloaded = true
        silentEnabled = false
-       UpdateHitboxes()
+       UpdateHitboxes() -- Restore one last time
        destroyAllBoxes()
        if noFogConnection then noFogConnection:Disconnect() end
        Rayfield:Destroy() 
    end,
 })
+
+
+------------------------------------------------------------------
+-- [ SYSTEM LOOPS ]
+------------------------------------------------------------------
+task.spawn(function()
+    -- FIX: Quét bằng GetDescendants để phòng trường hợp dev game nhét quái vào Folder
+    local all = Workspace:GetDescendants()
+    for i, m in ipairs(all) do
+        if m:IsA("Model") and isValidNPC(m) then addNPC(m) end
+        if i % 50 == 0 then task.wait() end -- Giảm lag khi quét Descendants
+    end
+end)
+
+table.insert(wallConnections, Workspace.DescendantAdded:Connect(function(m)
+    if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
+end))
+
+task.spawn(function()
+    while not isUnloaded do
+        if fastScanEnabled then
+            local children = Workspace:GetDescendants()
+            for i, m in ipairs(children) do
+                if not isUnloaded and fastScanEnabled then
+                    if m:IsA("Model") and not activeNPCs[m] then if isValidNPC(m) then addNPC(m) end end
+                    if i % 100 == 0 then task.wait() end 
+                end
+            end
+        end
+        task.wait(2) 
+    end
+end)
 
 RunService.RenderStepped:Connect(function()
     if isUnloaded then return end
@@ -316,3 +438,5 @@ RunService.RenderStepped:Connect(function()
         lighting.Ambient = Color3.new(1, 1, 1)
     end
 end)
+
+print("TOKAI HUB FIXED 🐧⚔️")
