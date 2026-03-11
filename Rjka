@@ -298,7 +298,7 @@ CombatTab:CreateToggle({
 
 CombatTab:CreateSlider({
    Name = "Hitbox Size",
-   Range = {0, 20},
+   Range = {0, 15},
    Increment = 1,
    Suffix = "Studs",
    CurrentValue = 15,
