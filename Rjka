@@ -7,19 +7,19 @@ local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
 local lighting = game:GetService("Lighting")
 
--- [ORIGINAL LOGIC]
+-- [ORIGINAL SETTINGS]
 local localPlayer = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 local hitboxSize = 15 
 local activeNPCs = {}      
 local trackedParts = {}    
+local originalSizes = {} -- Lưu kích thước gốc từ code hitbox mới 
 local wallConnections = {} 
 
 local wallEnabled = false       
 local silentEnabled = false     
 local showHitbox = false        
 local fullBrightEnabled = false 
-
 local isUnloaded = false     
 local fastScanEnabled = false   
 local patchOptions = { recoil = false, firemodes = false }
@@ -28,93 +28,49 @@ local maleColor = Color3.fromRGB(0, 255, 0)
 local zombieColor = Color3.fromRGB(255, 0, 0)
 
 ------------------------------------------------------------------
--- [[ HOOKS & SPOOFING (Hitbox Expander) ]]
+-- [[ NEW HITBOX LOGIC (INTEGRATED) ]]
 ------------------------------------------------------------------
-local ModifiedParts = {}
-local OriginalSizes = {}
 
--- Bọc pcall để chống crash nếu Executor đang bị lỗi hook do Roblox update
-local successHook, mt = pcall(function() return getrawmetatable(game) end)
-if successHook and mt then
-    local old_index = mt.__index
-    setreadonly(mt, false)
-
-    mt.__index = newcclosure(function(t, k)
-        if k == "Size" and ModifiedParts[t] then
-            return OriginalSizes[t] or Vector3.new(1, 1, 1)
-        end
-        return old_index(t, k)
-    end)
-    setreadonly(mt, true)
-else
-    warn("Executor không hỗ trợ getrawmetatable hiện tại. Hitbox có thể bị phát hiện.")
+-- Hàm phóng to Hitbox 
+local function applySilentHitbox(model, root)
+    if not originalSizes[model] then originalSizes[model] = root.Size end
+    local TARGET_SIZE = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
+    root.Size = TARGET_SIZE
+    root.Transparency = showHitbox and 0.85 or 1 
+    root.CanCollide = true
 end
 
-local function UpdateHitboxes()
-    if not silentEnabled then
-        for part, _ in pairs(ModifiedParts) do
-            if part and part.Parent then
-                part.Size = OriginalSizes[part] or part.Size
-                part.Transparency = 1 
-                part.CanCollide = false
-            end
-            ModifiedParts[part] = nil
-        end
-        return
+-- Hàm khôi phục Hitbox 
+local function restoreOriginalSize(model)
+    local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
+    if root and originalSizes[model] then
+        root.Size = originalSizes[model]
+        root.Transparency = 1
+        root.CanCollide = false
     end
-
-    local sizeVal = hitboxSize or 4
-    local expansion = Vector3.new(sizeVal, sizeVal, sizeVal)
-    local camPos = camera.CFrame.Position
-
-    for model, data in pairs(activeNPCs) do
-        local head = data.head 
-        
-        if not model.Parent then
-            if head and ModifiedParts[head] then
-                ModifiedParts[head] = nil
-            end
-            continue
-        end
-
-        if head and head:IsA("BasePart") then
-            local offset = head.Position - camPos
-            local distSqr = offset:Dot(offset)
-            
-            if distSqr < 25 then continue end 
-
-            if distSqr > 1000000 then 
-                if ModifiedParts[head] then
-                    head.Size = OriginalSizes[head]
-                    head.Transparency = 1
-                    head.CanCollide = false
-                    ModifiedParts[head] = nil
-                end
-                continue 
-            end
-
-            if not ModifiedParts[head] then
-                ModifiedParts[head] = true
-                OriginalSizes[head] = head.Size
-            end
-           
-            if head.Size ~= expansion then head.Size = expansion end
-            if not head.CanCollide then head.CanCollide = true end 
-            
-            head.Transparency = showHitbox and 0.4 or 1
-        end
-    end
+    originalSizes[model] = nil
 end
 
+-- Vòng lặp cập nhật Hitbox liên tục
 task.spawn(function()
     while not isUnloaded do
-        pcall(UpdateHitboxes)
+        if silentEnabled then
+            for model, data in pairs(activeNPCs) do
+                if model.Parent and data.root then
+                    applySilentHitbox(model, data.root)
+                end
+            end
+        else
+            for model, _ in pairs(originalSizes) do
+                restoreOriginalSize(model)
+            end
+        end
         task.wait(0.1)
     end
 end)
 
 ------------------------------------------------------------------
--- [CÁC LOGIC CÒN LẠI CỦA FILE GỐC]
+-- [[ CÁC LOGIC HỖ TRỢ ]]
 ------------------------------------------------------------------
 local originalLighting = {
     Brightness = lighting.Brightness,
@@ -128,13 +84,11 @@ local function getRootPart(model)
     return model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
 end
 
--- ĐÃ FIX: Cho phép tìm tên linh hoạt hơn (chứa chữ zombie thay vì phải giống y hệt 100%)
 local function isValidNPC(model)
     if not model or not model.Name then return false end
     local name = model.Name:lower()
-    
     local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = string.find(name, "male") ~= nil
+    local isMale = (model.Name == "Male") -- Theo điều kiện code mới 
 
     if isMale then
         local hasAI = false
@@ -158,7 +112,6 @@ local function createBoxForPart(part)
     local model = part.Parent
     if model then
         local name = model.Name:lower()
-        -- FIX MÀU: Nhận diện màu chuẩn hơn
         sphere.Color3 = string.find(name, "zombie") and zombieColor or maleColor
     end
     sphere.Parent = part
@@ -209,81 +162,18 @@ local function patchWeapons(options)
 end
 
 ------------------------------------------------------------------
--- [[ RAYFIELD UI LIBRARY ]]
+-- [[ RAYFIELD UI ]]
 ------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-local CustomTheme = {
-	TextColor = Color3.fromRGB(240, 240, 240),
-	Background = Color3.fromRGB(25, 25, 25),
-	Topbar = Color3.fromRGB(34, 34, 34),
-	Shadow = Color3.fromRGB(20, 20, 20),
-	NotificationBackground = Color3.fromRGB(20, 20, 20),
-	NotificationActionsBackground = Color3.fromRGB(230, 230, 230),
-	TabBackground = Color3.fromRGB(80, 80, 80),
-	TabStroke = Color3.fromRGB(85, 85, 85),
-	TabBackgroundSelected = Color3.fromRGB(210, 210, 210),
-	TabTextColor = Color3.fromRGB(240, 240, 240),
-	SelectedTabTextColor = Color3.fromRGB(50, 50, 50),
-	ElementBackground = Color3.fromRGB(35, 35, 35),
-	ElementBackgroundHover = Color3.fromRGB(40, 40, 40),
-	SecondaryElementBackground = Color3.fromRGB(25, 25, 25),
-	ElementStroke = Color3.fromRGB(50, 50, 50),
-	SecondaryElementStroke = Color3.fromRGB(40, 40, 40),
-	SliderBackground = Color3.fromRGB(50, 138, 220),
-	SliderProgress = Color3.fromRGB(50, 138, 220),
-	SliderStroke = Color3.fromRGB(58, 163, 255),
-	ToggleBackground = Color3.fromRGB(30, 30, 30),
-	ToggleEnabled = Color3.fromRGB(0, 146, 214),
-	ToggleDisabled = Color3.fromRGB(100, 100, 100),
-	ToggleEnabledStroke = Color3.fromRGB(0, 170, 255),
-	ToggleDisabledStroke = Color3.fromRGB(125, 125, 125),
-	ToggleEnabledOuterStroke = Color3.fromRGB(100, 100, 100),
-	ToggleDisabledOuterStroke = Color3.fromRGB(65, 65, 65),
-	DropdownSelected = Color3.fromRGB(40, 40, 40),
-	DropdownUnselected = Color3.fromRGB(30, 30, 30),
-	InputBackground = Color3.fromRGB(30, 30, 30),
-	InputStroke = Color3.fromRGB(65, 65, 65),
-	PlaceholderColor = Color3.fromRGB(178, 178, 178)
-}
-
 local Window = Rayfield:CreateWindow({
-   Name = "longtokai hub (Fixed)",
-   Icon = 0, 
-   LoadingTitle = "🐧",
-   LoadingSubtitle = "by LONGTOKAI - Fix Update",
-   ShowText = "Rayfield", 
-   Theme = CustomTheme, 
-   ToggleUIKeybind = "K", 
-
-   DisableRayfieldPrompts = false,
-   DisableBuildWarnings = false, 
-
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = nil, 
-      FileName = "Longtokai Hub"
-   },
-
-   Discord = {
-      Enabled = false, 
-      Invite = "noinvitelink", 
-      RememberJoins = false 
-   },
-
-   KeySystem = false
+   Name = "longtokai hub (Fixed Hitbox)",
+   Theme = "Default", 
+   ConfigurationSaving = { Enabled = true, FolderName = "Longtokai Hub" }
 })
 
-------------------------------------------------------------------
--- [ TABS & SECTIONS ]
-------------------------------------------------------------------
-
--- COMBAT TAB
 local CombatTab = Window:CreateTab("Combat ⚔️", nil)
-local CombatSection = CombatTab:CreateSection("Hitbox & Aim")
-
 CombatTab:CreateToggle({
-   Name = "Silent Hitbox (All NPCs)",
+   Name = "Silent Hitbox (Code mới)",
    CurrentValue = false,
    Flag = "SilentHitbox",
    Callback = function(Value) silentEnabled = Value end,
@@ -306,13 +196,9 @@ CombatTab:CreateSlider({
    Callback = function(Value) hitboxSize = Value end,
 })
 
-
--- VISIBLE TAB
 local VisibleTab = Window:CreateTab("Visible 👁️", nil)
-local VisibleSection = VisibleTab:CreateSection("ESP & World")
-
 VisibleTab:CreateToggle({
-   Name = "ESP Sphere (M:G, Z:R)",
+   Name = "ESP Sphere",
    CurrentValue = false,
    Flag = "ESPSphere",
    Callback = function(Value) 
@@ -325,14 +211,6 @@ VisibleTab:CreateToggle({
    end,
 })
 
--- FIX: Thay đổi trạng thái nút cho rõ ràng
-VisibleTab:CreateToggle({
-   Name = "Auto Fast Scan (Bật nếu quái spawn liên tục)",
-   CurrentValue = false,
-   Flag = "FastScan",
-   Callback = function(Value) fastScanEnabled = Value end,
-})
-
 VisibleTab:CreateToggle({
    Name = "FullBright",
    CurrentValue = false,
@@ -343,91 +221,32 @@ VisibleTab:CreateToggle({
    end,
 })
 
-local noFogConnection = nil
-VisibleTab:CreateToggle({
-   Name = "No Fog",
-   CurrentValue = false,
-   Flag = "NoFog",
-   Callback = function(Value) 
-        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
-        if atmosphere then
-            if Value then
-                atmosphere.Density = 0
-                noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function() atmosphere.Density = 0 end)
-            else
-                if noFogConnection then noFogConnection:Disconnect(); noFogConnection = nil end
-            end
-        end
-   end,
-})
-
-
--- WEAPONS TAB
-local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
-local WeaponsSection = WeaponsTab:CreateSection("Gun Mods")
-
-WeaponsTab:CreateToggle({
-   Name = "Anti-Recoil",
-   CurrentValue = false,
-   Flag = "AntiRecoil",
-   Callback = function(Value) patchOptions.recoil = Value patchWeapons(patchOptions) end,
-})
-
-WeaponsTab:CreateToggle({
-   Name = "Unlock Firemodes",
-   CurrentValue = false,
-   Flag = "UnlockFiremodes",
-   Callback = function(Value) patchOptions.firemodes = Value patchWeapons(patchOptions) end,
-})
-
-
--- SETTINGS TAB
 local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
-local SettingsSection = SettingsTab:CreateSection("System")
-
 SettingsTab:CreateButton({
    Name = "Unload Script",
    Callback = function()
        isUnloaded = true
        silentEnabled = false
-       UpdateHitboxes() -- Restore one last time
+       for m, _ in pairs(originalSizes) do restoreOriginalSize(m) end
        destroyAllBoxes()
-       if noFogConnection then noFogConnection:Disconnect() end
        Rayfield:Destroy() 
    end,
 })
-
 
 ------------------------------------------------------------------
 -- [ SYSTEM LOOPS ]
 ------------------------------------------------------------------
 task.spawn(function()
-    -- FIX: Quét bằng GetDescendants để phòng trường hợp dev game nhét quái vào Folder
     local all = Workspace:GetDescendants()
     for i, m in ipairs(all) do
         if m:IsA("Model") and isValidNPC(m) then addNPC(m) end
-        if i % 50 == 0 then task.wait() end -- Giảm lag khi quét Descendants
+        if i % 50 == 0 then task.wait() end
     end
 end)
 
 table.insert(wallConnections, Workspace.DescendantAdded:Connect(function(m)
     if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
 end))
-
-task.spawn(function()
-    while not isUnloaded do
-        if fastScanEnabled then
-            local children = Workspace:GetDescendants()
-            for i, m in ipairs(children) do
-                if not isUnloaded and fastScanEnabled then
-                    if m:IsA("Model") and not activeNPCs[m] then if isValidNPC(m) then addNPC(m) end end
-                    if i % 100 == 0 then task.wait() end 
-                end
-            end
-        end
-        task.wait(0.1) 
-    end
-end)
 
 RunService.RenderStepped:Connect(function()
     if isUnloaded then return end
@@ -439,4 +258,4 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-print("TOKAI HUB FIXED 🐧⚔️")
+print("TOKAI HUB FIXED HITBOX LOADED 🐧⚔️")
