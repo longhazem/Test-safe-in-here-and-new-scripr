@@ -109,7 +109,7 @@ end
 task.spawn(function()
     while not isUnloaded do
         pcall(UpdateHitboxes)
-        task.wait(1)
+        task.wait(0.1)
     end
 end)
 
@@ -425,7 +425,7 @@ task.spawn(function()
                 end
             end
         end
-        task.wait(2) 
+        task.wait(0.1) 
     end
 end)
 
