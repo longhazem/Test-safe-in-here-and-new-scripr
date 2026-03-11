@@ -20,9 +20,9 @@ local wallEnabled = false
 local silentEnabled = false     
 local showHitbox = false        
 local fullBrightEnabled = false 
-local alwaysDayEnabled = false  -- Biến cho Always Day
+local alwaysDayEnabled = false
+local fastScanEnabled = false
 local isUnloaded = false     
-local fastScanEnabled = false   
 local patchOptions = { recoil = false, firemodes = false }
 
 local maleColor = Color3.fromRGB(0, 255, 0)
@@ -35,7 +35,7 @@ local noFogConnection = nil
 local function applySilentHitbox(model, root)
     if not originalSizes[model] then originalSizes[model] = root.Size end
     local TARGET_SIZE = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-    root.Size = TARGET_SIZE
+    if root.Size ~= TARGET_SIZE then root.Size = TARGET_SIZE end
     root.Transparency = showHitbox and 0.85 or 1 
     root.CanCollide = true
 end
@@ -50,6 +50,205 @@ local function restoreOriginalSize(model)
     originalSizes[model] = nil
 end
 
+------------------------------------------------------------------
+-- [[ ESP NPC LOGIC ]]
+------------------------------------------------------------------
+local function isValidNPC(model)
+    if not model or not model.Name then return false end
+    local name = model.Name:lower()
+    local isZombie = string.find(name, "zombie") ~= nil
+    local isMale = (model.Name == "Male") -- Kiểm tra đúng tên quái trong BRM5
+
+    if isMale then
+        local hasAI = false
+        for _, c in ipairs(model:GetChildren()) do
+            if type(c.Name) == "string" and c.Name:sub(1, 3) == "AI_" then hasAI = true break end
+        end
+        return hasAI
+    end
+    return isZombie
+end
+
+local function createBoxForPart(part)
+    if not part or part:FindFirstChild("Wall_Box") then return end
+    local sphere = Instance.new("SphereHandleAdornment")
+    sphere.Name = "Wall_Box"
+    sphere.Radius = 1.2
+    sphere.Adornee = part
+    sphere.AlwaysOnTop = true 
+    sphere.ZIndex = 10
+    sphere.Transparency = 0.1
+    
+    local model = part.Parent
+    if model then
+        local name = model.Name:lower()
+        sphere.Color3 = string.find(name, "zombie") and zombieColor or maleColor
+    end
+    
+    sphere.Parent = part
+    trackedParts[part] = true
+end
+
+local function destroyAllBoxes()
+    for part, _ in pairs(trackedParts) do
+        if part and part:FindFirstChild("Wall_Box") then pcall(function() part.Wall_Box:Destroy() end) end
+    end
+    trackedParts = {}
+end
+
+local function addNPC(model)
+    if activeNPCs[model] or not isValidNPC(model) then return end
+    local head = model:FindFirstChild("Head")
+    local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
+    if not (head or root) then return end
+    
+    activeNPCs[model] = { head = head or root, root = root }
+    if wallEnabled then createBoxForPart(head or root) end
+end
+
+------------------------------------------------------------------
+-- [[ WEAPON MODS ]]
+------------------------------------------------------------------
+local function patchWeapons(options)
+    local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
+    if not weaponsFolder then return end
+    for _, platform in pairs(weaponsFolder:GetChildren()) do
+       if platform.Name:match("^Platform_") then
+            for _, weapon in pairs(platform:GetChildren()) do
+                for _, child in pairs(weapon:GetChildren()) do
+                    if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
+                        local success, receiver = pcall(require, child)
+                        if success and receiver and receiver.Config and receiver.Config.Tune then
+                            local tune = receiver.Config.Tune
+                            if options.recoil then
+                                tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.RecoilForce_Tap = 0
+                                tune.RecoilForce_Impulse = 0 tune.Recoil_Range = Vector2.zero
+                                tune.Recoil_Camera = 0 tune.RecoilAccelDamp_Crouch = Vector3.new(1, 1, 1)
+                                tune.RecoilAccelDamp_Prone = Vector3.new(1, 1, 1)
+                            end
+                            if options.firemodes then tune.Firemodes = {3, 2, 1, 0} end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+------------------------------------------------------------------
+-- [[ RAYFIELD UI ]]
+------------------------------------------------------------------
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+   Name = "longtokai hub (Fix ESP & Fog)",
+   Theme = "Default", 
+   ConfigurationSaving = { Enabled = true, FolderName = "Longtokai Hub" }
+})
+
+-- COMBAT
+local CombatTab = Window:CreateTab("Combat ⚔️", nil)
+CombatTab:CreateToggle({
+   Name = "Silent Hitbox",
+   CurrentValue = false,
+   Callback = function(Value) silentEnabled = Value end,
+})
+CombatTab:CreateToggle({
+   Name = "Show Hitbox Box",
+   CurrentValue = false,
+   Callback = function(Value) showHitbox = Value end,
+})
+CombatTab:CreateSlider({
+   Name = "Hitbox Size",
+   Range = {0, 15},
+   Increment = 1,
+   CurrentValue = 15,
+   Callback = function(Value) hitboxSize = Value end,
+})
+
+-- VISIBLE
+local VisibleTab = Window:CreateTab("Visible 👁️", nil)
+VisibleTab:CreateToggle({
+   Name = "ESP NPC (Sphere)",
+   CurrentValue = false,
+   Callback = function(Value) 
+       wallEnabled = Value
+       if wallEnabled then 
+           for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
+       else 
+           destroyAllBoxes() 
+       end 
+   end,
+})
+
+VisibleTab:CreateToggle({
+   Name = "No Fog (Force Density 0)",
+   CurrentValue = false,
+   Callback = function(Value) 
+        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            if Value then
+                atmosphere.Density = 0
+                noFogConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function()
+                    atmosphere.Density = 0
+                end)
+                lighting.FogEnd = 100000
+            else
+                if noFogConnection then noFogConnection:Disconnect(); noFogConnection = nil end
+                atmosphere.Density = 0.3
+                lighting.FogEnd = 10000
+            end
+        end
+   end,
+})
+
+VisibleTab:CreateToggle({
+   Name = "Always Day",
+   CurrentValue = false,
+   Callback = function(Value) alwaysDayEnabled = Value end,
+})
+
+VisibleTab:CreateToggle({
+   Name = "FullBright",
+   CurrentValue = false,
+   Callback = function(Value) fullBrightEnabled = Value end,
+})
+
+VisibleTab:CreateToggle({
+   Name = "Fast Scan (Spawn liên tục)",
+   CurrentValue = false,
+   Callback = function(Value) fastScanEnabled = Value end,
+})
+
+-- WEAPONS
+local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
+WeaponsTab:CreateToggle({
+   Name = "Anti-Recoil",
+   CurrentValue = false,
+   Callback = function(Value) patchOptions.recoil = Value patchWeapons(patchOptions) end,
+})
+WeaponsTab:CreateToggle({
+   Name = "Unlock Firemodes",
+   CurrentValue = false,
+   Callback = function(Value) patchOptions.firemodes = Value patchWeapons(patchOptions) end,
+})
+
+-- SETTINGS
+local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
+SettingsTab:CreateButton({
+   Name = "Unload Script",
+   Callback = function()
+       isUnloaded = true
+       silentEnabled = false
+       for m, _ in pairs(originalSizes) do restoreOriginalSize(m) end
+       destroyAllBoxes()
+       if noFogConnection then noFogConnection:Disconnect() end
+       Rayfield:Destroy() 
+   end,
+})
+
+------------------------------------------------------------------
+-- [ SYSTEM LOOPS ]
+------------------------------------------------------------------
 task.spawn(function()
     while not isUnloaded do
         if silentEnabled then
@@ -63,149 +262,35 @@ task.spawn(function()
     end
 end)
 
-------------------------------------------------------------------
--- [[ HELPER FUNCTIONS ]]
-------------------------------------------------------------------
-local originalLighting = {
-    Brightness = lighting.Brightness,
-    ClockTime = lighting.ClockTime,
-    FogEnd = lighting.FogEnd,
-    GlobalShadows = lighting.GlobalShadows,
-    Ambient = lighting.Ambient
-}
-
-local function isValidNPC(model)
-    if not model or not model.Name then return false end
-    local name = model.Name:lower()
-    local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = (model.Name == "Male") 
-    if isMale then
-        local hasAI = false
-        for _, c in ipairs(model:GetChildren()) do
-            if type(c.Name) == "string" and c.Name:sub(1, 3) == "AI_" then hasAI = true break end
-        end
-        return hasAI
-    end
-    return isZombie
-end
-
-local function addNPC(model)
-    if activeNPCs[model] or not isValidNPC(model) then return end
-    local head = model:FindFirstChild("Head")
-    local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
-    if not (head or root) then return end
-    activeNPCs[model] = { head = head or root, root = root }
-end
-
-------------------------------------------------------------------
--- [[ RAYFIELD UI ]]
-------------------------------------------------------------------
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({
-   Name = "longtokai hub (Ultimate)",
-   Theme = "Default", 
-   ConfigurationSaving = { Enabled = true, FolderName = "Longtokai Hub" }
-})
-
--- COMBAT TAB
-local CombatTab = Window:CreateTab("Combat ⚔️", nil)
-CombatTab:CreateToggle({
-   Name = "Silent Hitbox",
-   CurrentValue = false,
-   Callback = function(Value) silentEnabled = Value end,
-})
-CombatTab:CreateSlider({
-   Name = "Hitbox Size",
-   Range = {0, 15},
-   Increment = 1,
-   CurrentValue = 15,
-   Callback = function(Value) hitboxSize = Value end,
-})
-
--- VISIBLE TAB
-local VisibleTab = Window:CreateTab("Visible 👁️", nil)
-VisibleTab:CreateToggle({
-   Name = "Always Day (Luôn ban ngày)",
-   CurrentValue = false,
-   Callback = function(Value) 
-       alwaysDayEnabled = Value 
-       if not Value then lighting.ClockTime = originalLighting.ClockTime end
-   end,
-})
-
-VisibleTab:CreateToggle({
-   Name = "FullBright",
-   CurrentValue = false,
-   Callback = function(Value) 
-       fullBrightEnabled = Value
-       if not Value then 
-           lighting.Brightness = originalLighting.Brightness
-           lighting.Ambient = originalLighting.Ambient
-       end
-   end,
-})
-
-VisibleTab:CreateToggle({
-   Name = "No Fog",
-   CurrentValue = false,
-   Callback = function(Value) 
-        local atmosphere = lighting:FindFirstChildOfClass("Atmosphere")
-        if atmosphere then
-            if Value then
-                atmosphere.Density = 0
-            else
-                atmosphere.Density = 0.3
-            end
-        end
-        lighting.FogEnd = Value and 100000 or originalLighting.FogEnd
-   end,
-})
-
-VisibleTab:CreateToggle({
-   Name = "Fast Scan",
-   CurrentValue = false,
-   Callback = function(Value) fastScanEnabled = Value end,
-})
-
--- WEAPONS TAB
-local WeaponsTab = Window:CreateTab("Weapons 🔫", nil)
--- (Giữ nguyên logic patchWeapons như các bản trước)
-
--- SETTINGS
-local SettingsTab = Window:CreateTab("Settings ⚙️", nil)
-SettingsTab:CreateButton({
-   Name = "Unload Script",
-   Callback = function()
-       isUnloaded = true
-       for m, _ in pairs(originalSizes) do restoreOriginalSize(m) end
-       Rayfield:Destroy() 
-   end,
-})
-
-------------------------------------------------------------------
--- [[ SYSTEM LOOPS ]]
-------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if isUnloaded then return end
-    
-    -- Xử lý FullBright
     if fullBrightEnabled then
         lighting.Brightness = 2
         lighting.GlobalShadows = false
         lighting.Ambient = Color3.new(1, 1, 1)
     end
-
-    -- Xử lý Always Day (Ưu tiên FullBright nếu cả 2 cùng bật)
-    if alwaysDayEnabled then
-        lighting.ClockTime = 12
-    end
+    if alwaysDayEnabled then lighting.ClockTime = 12 end
 end)
 
--- Quét NPC ban đầu
+-- Quét NPC ban đầu và khi Spawn
 task.spawn(function()
     for _, m in ipairs(Workspace:GetDescendants()) do
         if m:IsA("Model") and isValidNPC(m) then addNPC(m) end
     end
 end)
 
-print("TOKAI HUB: Always Day Added! ☀️")
+Workspace.DescendantAdded:Connect(function(m)
+    if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end
+end)
+
+-- Fast Scan Loop
+task.spawn(function()
+    while not isUnloaded do
+        if fastScanEnabled then
+            for _, m in ipairs(Workspace:GetDescendants()) do
+                if not activeNPCs[m] and isValidNPC(m) then addNPC(m) end
+            end
+        end
+        task.wait(1)
+    end
+end)
