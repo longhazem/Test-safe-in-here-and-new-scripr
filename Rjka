@@ -139,7 +139,7 @@ end
 ------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
-   Name = "longtokai hub | Ultra Scan 0.001",
+   Name = "⚔️🐧tokai hub (BRM5)",
    Theme = "Default"
 })
 
@@ -148,7 +148,7 @@ CombatTab:CreateToggle({ Name = "Silent Hitbox", CurrentValue = false, Callback 
 CombatTab:CreateToggle({ Name = "Show Hitbox (Red 0.1)", CurrentValue = false, Callback = function(v) showHitbox = v end })
 CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, CurrentValue = 20, Callback = function(v) hitboxSize = v end })
 
-local VisibleTab = Window:CreateTab("Visible 👁️")
+local VisibleTab = Window:CreateTab("Visible ")
 VisibleTab:CreateToggle({
    Name = "ESP NPC (Sphere)",
    CurrentValue = false,
@@ -179,7 +179,7 @@ VisibleTab:CreateToggle({
 VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = function(v) alwaysDayEnabled = v end })
 VisibleTab:CreateToggle({ Name = "FullBright", CurrentValue = false, Callback = function(v) fullBrightEnabled = v end })
 
-local WeaponsTab = Window:CreateTab("Weapons 🔫")
+local WeaponsTab = Window:CreateTab("Weapons ")
 WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
 WeaponsTab:CreateToggle({ Name = "Unlock All Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
 
