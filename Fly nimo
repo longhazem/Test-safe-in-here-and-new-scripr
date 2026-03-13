@@ -1,134 +1,122 @@
---[[ 
-    MINI FLY TOOL FOR BRM5
-    - Tự động tìm CharacterController của BRM5.
-    - UI có thể nắm đầu kéo đi mọi nơi trên màn hình.
-    - Hỗ trợ phím tắt 'T' để bật/tắt nhanh.
-]]
-
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local ToggleBtn = Instance.new("TextButton")
-local SpeedInput = Instance.new("TextBox")
-local StatusLabel = Instance.new("TextLabel")
-
--- Cài đặt mặc định
-local CharSettings = {
+getgenv().CharSettings = {
     FlyEnabled = false,
     FlySpeed = 50
 }
+local CS = getgenv().CharSettings
 
--- 1. SETUP UI
-ScreenGui.Name = "MiniFlyGui"
-ScreenGui.Parent = game:GetService("CoreGui")
-ScreenGui.ResetOnSpawn = false
+local players = game:GetService("Players")
+local workspace = game:GetService("Workspace")
+local user_input_service = game:GetService("UserInputService")
+local replicated_storage = game:GetService("ReplicatedStorage")
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
 
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.1, 0, 0.1, 0)
-MainFrame.Size = UDim2.new(0, 150, 0, 180)
-MainFrame.Active = true
-MainFrame.Draggable = true -- Cho phép kéo thả
-
-Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-Title.Text = "BRM5 MINI FLY"
-Title.TextColor3 = Color3.new(1, 1, 1)
-Title.TextSize = 14
-Title.Font = Enum.Font.SourceSansBold
-
-ToggleBtn.Parent = MainFrame
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.25, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-ToggleBtn.Text = "FLY: OFF"
-ToggleBtn.TextColor3 = Color3.new(1, 1, 1)
-ToggleBtn.BorderSizePixel = 0
-
-SpeedInput.Parent = MainFrame
-SpeedInput.Position = UDim2.new(0.1, 0, 0.55, 0)
-SpeedInput.Size = UDim2.new(0.8, 0, 0, 30)
-SpeedInput.PlaceholderText = "Tốc độ (50)..."
-SpeedInput.Text = "50"
-SpeedInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-SpeedInput.TextColor3 = Color3.new(1, 1, 1)
-
-StatusLabel.Parent = MainFrame
-StatusLabel.Position = UDim2.new(0, 0, 0.8, 0)
-StatusLabel.Size = UDim2.new(1, 0, 0, 30)
-StatusLabel.Text = "Phím tắt: T"
-StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.TextSize = 12
-
--- 2. LOGIC FLY (HOOK BRM5)
-local function findModule()
-    for _, v in pairs(getgc(true)) do
-        if type(v) == "table" and rawget(v, "Update") and rawget(v, "_exhaust") then
-            return v
+local function findModule(name)
+    local rf = game:GetService("ReplicatedFirst")
+    for _, flux_name in ipairs({"Flux_client", "Flux/client", "Flux"}) do
+        local flux = rf:FindFirstChild(flux_name)
+        if flux then
+            local found = flux:FindFirstChild(name, true)
+            if found then return found end
         end
     end
+    local found = rf:FindFirstChild(name, true)
+    if found then return found end
+
+    local Packages = replicated_storage:FindFirstChild("Packages")
+    local RequireMod = Packages and Packages:FindFirstChild("require")
+    if RequireMod then
+        local success, Loader = pcall(require, RequireMod)
+        if success and Loader and Loader._modules and Loader._modules[name] then
+            return Loader._modules[name]
+        end
+    end
+    
+    found = replicated_storage:FindFirstChild(name, true)
+    if found and found:IsA("ModuleScript") then return found end
+
     return nil
 end
 
-local CharController = findModule()
+task.spawn(function()
+    local CharacterController = nil
+    while true do
+        if not CharacterController then
+            local mod = findModule("CharacterController")
+            if mod then
+                local success, result = pcall(require, mod)
+                if success and result and result.Update then
+                    CharacterController = result
 
-if CharController then
-    if not getgenv().OldUpdate then
-        getgenv().OldUpdate = CharController.Update
-    end
+                    if not getgenv().OldCharUpdate then
+                        getgenv().OldCharUpdate = CharacterController.Update
+                    end
+                    
+                    CharacterController.Update = function(self, inputVector, deltaTime)
+                        if not self or not self._localActor then return getgenv().OldCharUpdate(self, inputVector, deltaTime) end
 
-    CharController.Update = function(self, ...)
-        getgenv().OldUpdate(self, ...)
-        if CharSettings.FlyEnabled then
-            local root = self._rootPart
-            local hum = self._humanoid
-            if root and hum then
-                local moveDir = hum.MoveDirection
-                if moveDir.Magnitude > 0 then
-                    root.Velocity = moveDir * CharSettings.FlySpeed
-                else
-                    root.Velocity = Vector3.new(0, 0, 0)
+                        local baseWeight = self._weightMulti or 1
+
+                        if CS.FlyEnabled then
+                            self.VelocityGravity = 0
+                            self.HeightState = 0 
+                            self.IsGrounded = true
+                            
+                            local camCF = workspace.CurrentCamera.CFrame
+                            local dir = Vector3_new(0, 0, 0)
+
+                            if inputVector.Magnitude > 0 then
+                                dir = dir + (camCF.LookVector * -inputVector.Y) + (camCF.RightVector * inputVector.X)
+                            end
+
+                            if user_input_service:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3_new(0, 1, 0) end
+                            if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3_new(0, 1, 0) end
+
+                            if dir.Magnitude > 0 then
+                                local flySpeedVal = tonumber(CS.FlySpeed) or 50
+                                local flySprint = user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and 2.5 or 1
+                                local nextPos = self._position + (dir.Unit * flySpeedVal * flySprint * deltaTime)
+                                
+                                self._position = nextPos
+                                self._lastSafePosition = nextPos
+                                if self._localActor then
+                                    self._localActor.SimulatedPosition = nextPos
+                                    self._localActor.Grounded = true
+                                    self._localActor.Sprinting = false
+                                end
+                            end
+
+                            local char = self._localActor and (self._localActor.Character or self._localActor._model)
+                            if char then
+                                local root = char:FindFirstChild("Root") or char.PrimaryPart
+                                if root then
+                                     root.Velocity = Vector3_new(0,0,0)
+                                     root.AssemblyLinearVelocity = Vector3_new(0,0,0)
+                                     local lookDir = camCF.LookVector
+                                     root.CFrame = CFrame_new(self._position, self._position + lookDir)
+                                end
+                            end
+                            self._weightMulti = baseWeight
+                            return 
+                        end
+
+                        self._weightMulti = baseWeight
+                        return getgenv().OldCharUpdate(self, inputVector, deltaTime)
+                    end
+                    print("Hook CharacterController thanh cong!")
+                    break 
                 end
-                root.RotVelocity = Vector3.new(0, 0, 0)
             end
         end
-    end
-else
-    warn("Không tìm thấy CharacterController! Hãy thử lại khi nhân vật đã spawn.")
-end
-
--- 3. XỬ LÝ SỰ KIỆN UI
-local function ToggleFly()
-    CharSettings.FlyEnabled = not CharSettings.FlyEnabled
-    if CharSettings.FlyEnabled then
-        ToggleBtn.Text = "FLY: ON"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
-    else
-        ToggleBtn.Text = "FLY: OFF"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        -- Trả lại vận tốc khi tắt
-        pcall(function() game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,0,0) end)
-    end
-end
-
-ToggleBtn.MouseButton1Click:Connect(ToggleFly)
-
-SpeedInput.FocusLost:Connect(function()
-    local val = tonumber(SpeedInput.Text)
-    if val then
-        CharSettings.FlySpeed = val
-    else
-        SpeedInput.Text = tostring(CharSettings.FlySpeed)
+        task.wait(2)
     end
 end)
 
-game:GetService("UserInputService").InputBegan:Connect(function(input, typing)
+local FlyKey = Enum.KeyCode.T
+user_input_service.InputBegan:Connect(function(input, typing)
     if typing then return end
-    if input.KeyCode == Enum.KeyCode.T then
-        ToggleFly()
+    if input.KeyCode == FlyKey then
+        CS.FlyEnabled = not CS.FlyEnabled
+        print("Fly status: " .. tostring(CS.FlyEnabled))
     end
 end)
