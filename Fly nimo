@@ -1,82 +1,109 @@
--- BRM5 Fly Fix
+-- Khởi tạo cài đặt
 getgenv().CharSettings = {
     FlyEnabled = false,
-    FlySpeed = 60 -- BRM5 map rộng nên để tầm 60-80 cho nhanh
+    FlySpeed = 60 -- BRM5 map rộng nên để 60 cho nhanh
 }
 
 local settings = getgenv().CharSettings
-local uis = game:GetService("UserInputService")
-local runService = game:GetService("RunService")
 local players = game:GetService("Players")
-local lp = players.LocalPlayer
+local workspace = game:GetService("Workspace")
+local uis = game:GetService("UserInputService")
+local replicated_storage = game:GetService("ReplicatedStorage")
+local Vector3_new = Vector3.new
+local CFrame_new = CFrame.new
 
--- Hàm tìm kiếm module sâu hơn cho BRM5
-local function getBRM5Controller()
-    for _, v in ipairs(getgc(true)) do
-        if type(v) == "table" and rawget(v, "Update") and rawget(v, "_localActor") then
-            return v
+-- Giữ nguyên hàm tìm Module của bạn
+local function findModule(name)
+    local rf = game:GetService("ReplicatedFirst")
+    for _, flux_name in ipairs({"Flux_client", "Flux/client", "Flux"}) do
+        local flux = rf:FindFirstChild(flux_name)
+        if flux then
+            local found = flux:FindFirstChild(name, true)
+            if found then return found end
         end
     end
-    return nil
+    local found = rf:FindFirstChild(name, true) or replicated_storage:FindFirstChild(name, true)
+    return found
 end
 
-local controller = getBRM5Controller()
+task.spawn(function()
+    local CharacterController = nil
+    while true do
+        local mod = findModule("CharacterController")
+        if mod then
+            local success, result = pcall(require, mod)
+            if success and result and result.Update then
+                CharacterController = result
 
--- Vòng lặp chính để xử lý bay (Thay vì Hook hàm Update của game)
-runService.Heartbeat:Connect(function(dt)
-    if not settings.FlyEnabled then return end
-    
-    local char = lp.Character
-    if not char then return end
-    local root = char:FindFirstChild("Root") or char.PrimaryPart
-    if not root then return end
+                if not getgenv().OldCharUpdate then
+                    getgenv().OldCharUpdate = CharacterController.Update
+                end
+                
+                CharacterController.Update = function(self, inputVector, deltaTime)
+                    -- KIỂM TRA ĐIỀU KIỆN BAY
+                    if settings.FlyEnabled and self._localActor then
+                        -- 1. Triệt tiêu mọi loại trọng lực và vận tốc rơi
+                        self.VelocityGravity = 0
+                        self.HeightState = 0 
+                        self.IsGrounded = true
+                        self._velocity = Vector3_new(0,0,0) -- FIX: Triệt tiêu vận tốc nội bộ của Controller
 
-    -- Vô hiệu hóa trọng lực của BRM5 bằng cách ép Velocity
-    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    
-    local camCF = workspace.CurrentCamera.CFrame
-    local moveDir = Vector3.new(0, 0, 0)
+                        local camCF = workspace.CurrentCamera.CFrame
+                        local dir = Vector3_new(0, 0, 0)
 
-    -- Phím di chuyển cơ bản
-    if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
-    if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
-    if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
-    if uis:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
-    
-    -- Bay lên/xuống
-    if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-    if uis:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+                        -- 2. Tính toán hướng di chuyển dựa trên input của Controller
+                        if inputVector.Magnitude > 0 then
+                            dir = dir + (camCF.LookVector * -inputVector.Y) + (camCF.RightVector * inputVector.X)
+                        end
 
-    if moveDir.Magnitude > 0 then
-        local speed = settings.FlySpeed
-        if uis:IsKeyDown(Enum.KeyCode.LeftShift) then speed = speed * 2 end
-        
-        -- Ép CFrame để bay (Đây là cách duy nhất qua mặt được controller của BRM5)
-        root.CFrame = root.CFrame + (moveDir.Unit * speed * dt)
-    end
-    
-    -- Cập nhật cho Controller của game để không bị giật ngược (Anti-Teleport nhẹ)
-    if controller then
-        controller._position = root.Position
-        if controller._localActor then
-            controller._localActor.SimulatedPosition = root.Position
+                        -- Bay lên / Xuống
+                        if uis:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3_new(0, 1, 0) end
+                        if uis:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3_new(0, 1, 0) end
+
+                        if dir.Magnitude > 0 then
+                            local flySpeedVal = tonumber(settings.FlySpeed) or 50
+                            local flySprint = uis:IsKeyDown(Enum.KeyCode.LeftShift) and 2 or 1
+                            local nextPos = self._position + (dir.Unit * flySpeedVal * flySprint * deltaTime)
+                            
+                            -- 3. Cập nhật vị trí cho cả Controller và Actor
+                            self._position = nextPos
+                            self._lastSafePosition = nextPos
+                            
+                            if self._localActor then
+                                self._localActor.SimulatedPosition = nextPos
+                                self._localActor.Grounded = true
+                                self._localActor.Sprinting = false
+                            end
+                        end
+
+                        -- 4. Ép CFrame cho nhân vật để nhìn thấy sự thay đổi
+                        local char = self._localActor.Character or self._localActor._model
+                        if char then
+                            local root = char:FindFirstChild("Root") or char.PrimaryPart
+                            if root then
+                                root.AssemblyLinearVelocity = Vector3_new(0,0,0) -- Khóa cứng vật lý Engine
+                                root.CFrame = CFrame_new(self._position, self._position + camCF.LookVector)
+                            end
+                        end
+                        return -- Ngắt không cho chạy logic gốc (trọng lực, ma sát...)
+                    end
+
+                    -- Chạy logic gốc nếu không bật Fly
+                    return getgenv().OldCharUpdate(self, inputVector, deltaTime)
+                end
+                warn(">>> ĐÃ FIX VÀ HOOK THÀNH CÔNG CHARACTERCONTROLLER <<<")
+                break 
+            end
         end
+        task.wait(2)
     end
 end)
 
--- Bật/Tắt
+-- Toggle Phím T
 uis.InputBegan:Connect(function(input, typing)
     if typing then return end
     if input.KeyCode == Enum.KeyCode.T then
         settings.FlyEnabled = not settings.FlyEnabled
-        print("BRM5 Fly:", settings.FlyEnabled)
-        
-        -- Reset vận tốc khi tắt để không bị rớt cái rầm
-        if not settings.FlyEnabled and lp.Character then
-            local root = lp.Character:FindFirstChild("Root") or lp.Character.PrimaryPart
-            if root then root.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-        end
+        print("Fly Mode:", settings.FlyEnabled)
     end
 end)
-
-warn(">>> BRM5 FLY LOADED - PRESS T TO TOGGLE 🗿")
