@@ -1,0 +1,251 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local Players = game:GetService('Players')
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- Cấu hình toàn cục
+_G.TokaiConfig = _G.TokaiConfig or {
+    AimEnabled = false,
+    WallCheck = true,
+    FovRadius = 150,
+    FovVisible = true,
+    EspEnabled = false
+}
+
+-- Xóa UI cũ nếu có
+local function CleanupOldUI()
+    local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
+    if oldUI then oldUI:Destroy() end
+    if _G.FovOutline then _G.FovOutline:Destroy() end
+    if _G.FovInline then _G.FovInline:Destroy() end
+end
+CleanupOldUI()
+
+-- Khởi tạo Drawing FOV
+_G.FovOutline = Drawing.new("Circle")
+_G.FovOutline.Thickness = 2
+_G.FovOutline.Color = Color3.new(0, 0, 0)
+_G.FovOutline.Filled = false
+_G.FovOutline.Transparency = 0.5
+_G.FovOutline.Visible = false
+
+_G.FovInline = Drawing.new("Circle")
+_G.FovInline.Thickness = 1
+_G.FovInline.Color = Color3.fromRGB(255, 245, 100)
+_G.FovInline.Filled = false
+_G.FovInline.Transparency = 0.8
+_G.FovInline.Visible = false
+
+-- === LOGIC SILENT AIM & WALL CHECK ===
+local Functions = {
+    GetClients = filtergc('function', {Name = 'GetClients', Constants = {'Clients'}}, false),
+    GetMuzzleCFrame = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
+    GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
+}
+local ClientService = nil
+
+function IsVisible(TargetPart)
+    if not _G.TokaiConfig.WallCheck then return true end
+    local RayParams = RaycastParams.new()
+    RayParams.FilterType = Enum.RaycastFilterType.Exclude
+    RayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    local Origin = Camera.CFrame.Position
+    local Direction = (TargetPart.Position - Origin)
+    local Result = Workspace:Raycast(Origin, Direction, RayParams)
+    return (not Result or Result.Instance:IsDescendantOf(TargetPart.Parent))
+end
+
+function GetClosest()
+    if not _G.TokaiConfig.AimEnabled or not ClientService then return nil end
+    local ClosestPlayer, ClosestData, ClosestDistance = nil, nil, math.huge
+    local Center = Camera.ViewportSize / 2
+
+    for Player, Data in pairs(ClientService.Clients) do
+        if Player == LocalPlayer then continue end
+        if not Data.Actor or not Data.Actor.Alive then continue end
+        if Data.Squad == ClientService.LocalClient.Squad then continue end
+
+        local TargetPart = Data.Actor.Parts.Head
+        local Position, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+        if not OnScreen then continue end
+
+        local Distance = (Vector2.new(Position.X, Position.Y) - Center).Magnitude
+        if Distance <= _G.TokaiConfig.FovRadius and Distance < ClosestDistance then
+            if IsVisible(TargetPart) then
+                ClosestPlayer = Player; ClosestData = Data; ClosestDistance = Distance
+            end
+        end
+    end
+    return ClosestPlayer, ClosestData
+end
+
+-- Hooking System
+task.spawn(function()
+    for _, Function in pairs(Functions.GetClients) do
+        if getinfo(Function).source:find('ClientService') then Functions.GetClients = Function end
+    end
+    local OldClients; OldClients = hookfunction(Functions.GetClients, function(Self)
+        ClientService = Self; return OldClients(Self)
+    end)
+    local OldMuzzle; OldMuzzle = hookfunction(Functions.GetMuzzleCFrame, function(Self, Cast)
+        local Origin, Barrel, Cam = OldMuzzle(Self, Cast)
+        if not Cast and Origin and _G.TokaiConfig.AimEnabled then
+            local Player, Data = GetClosest()
+            if Player then return CFrame.new(Origin.Position, Data.Actor.Parts.Head.Position), Barrel, Cam end
+        end
+        return Origin, Barrel, Cam
+    end)
+end)
+
+-- === LOGIC ESP ===
+local function UpdateESP()
+    for _, object in pairs(Workspace:GetChildren()) do
+        if object:IsA("Model") and object.Name == "Male" then
+            local highlight = object:FindFirstChild("TOKAI_ESP")
+            if _G.TokaiConfig.EspEnabled then
+                if not highlight then
+                    highlight = Instance.new("Highlight")
+                    highlight.Name = "TOKAI_ESP"
+                    highlight.FillColor = Color3.fromRGB(0, 255, 200)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.Parent = object
+                end
+            else
+                if highlight then highlight:Destroy() end
+            end
+        end
+    end
+end
+
+task.spawn(function()
+    while task.wait(3) do
+        if _G.TokaiConfig.EspEnabled then UpdateESP() end
+    end
+end)
+
+-- === UI LIBRARY (FULL) ===
+local Library = {}
+function Library:CreateWindow()
+    local screenGui = Instance.new("ScreenGui", (gethui and gethui()) or game.CoreGui)
+    screenGui.Name = "TOKAIHUB"; screenGui.ResetOnSpawn = false
+
+    local main = Instance.new("Frame", screenGui)
+    main.Size = UDim2.new(0, 520, 0, 320); main.Position = UDim2.new(0.5, 0, 0.5, 0); main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.BackgroundColor3 = Color3.fromRGB(15, 15, 15); main.BackgroundTransparency = 0.1
+    Instance.new("UICorner", main)
+    local mainStroke = Instance.new("UIStroke", main); mainStroke.Thickness = 2; mainStroke.Color = Color3.fromRGB(255, 245, 100)
+
+    local sidebar = Instance.new("Frame", main)
+    sidebar.Size = UDim2.new(0, 150, 1, 0); sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0); sidebar.BackgroundTransparency = 0.4
+    Instance.new("UICorner", sidebar)
+
+    local tabList = Instance.new("ScrollingFrame", sidebar)
+    tabList.Size = UDim2.new(1, 0, 1, -70); tabList.Position = UDim2.new(0, 0, 0, 65); tabList.BackgroundTransparency = 1; tabList.ScrollBarThickness = 0
+    Instance.new("UIListLayout", tabList).HorizontalAlignment = Enum.HorizontalAlignment.Center; tabList:FindFirstChildOfClass("UIListLayout").Padding = UDim.new(0, 5)
+
+    local pages = Instance.new("Frame", main)
+    pages.Size = UDim2.new(1, -170, 1, -20); pages.Position = UDim2.new(0, 160, 0, 10); pages.BackgroundTransparency = 1
+
+    function Library:CreateTab(name)
+        local page = Instance.new("ScrollingFrame", pages)
+        page.Size = UDim2.new(1, 0, 1, 0); page.Visible = false; page.BackgroundTransparency = 1; page.ScrollBarThickness = 2
+        Instance.new("UIListLayout", page).Padding = UDim.new(0, 10)
+
+        local tabBtn = Instance.new("TextButton", tabList)
+        tabBtn.Size = UDim2.new(0, 130, 0, 35); tabBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40); tabBtn.Text = name; tabBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        Instance.new("UICorner", tabBtn)
+        
+        tabBtn.MouseButton1Click:Connect(function()
+            for _, v in pairs(pages:GetChildren()) do v.Visible = false end
+            page.Visible = true
+        end)
+        if #tabList:GetChildren() == 2 then page.Visible = true end
+
+        local elements = {}
+        function elements:AddToggle(text, callback)
+            local tBtn = Instance.new("TextButton", page)
+            tBtn.Size = UDim2.new(1, -10, 0, 40); tBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); tBtn.Text = "  "..text; tBtn.TextColor3 = Color3.fromRGB(255,255,255); tBtn.TextXAlignment = Enum.TextXAlignment.Left
+            Instance.new("UICorner", tBtn)
+            local enabled = false
+            tBtn.MouseButton1Click:Connect(function()
+                enabled = not enabled
+                tBtn.BackgroundColor3 = enabled and Color3.fromRGB(60, 55, 30) or Color3.fromRGB(30, 30, 30)
+                callback(enabled)
+            end)
+        end
+
+        function elements:AddSlider(text, min, max, default, callback)
+            local sFrame = Instance.new("Frame", page)
+            sFrame.Size = UDim2.new(1, -10, 0, 50); sFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30); Instance.new("UICorner", sFrame)
+            local label = Instance.new("TextLabel", sFrame)
+            label.Size = UDim2.new(1, 0, 0, 20); label.Position = UDim2.new(0, 10, 0, 5); label.Text = text.." : "..default; label.TextColor3 = Color3.fromRGB(255,255,255); label.BackgroundTransparency = 1; label.TextXAlignment = Enum.TextXAlignment.Left
+            local bar = Instance.new("Frame", sFrame)
+            bar.Size = UDim2.new(1, -20, 0, 6); bar.Position = UDim2.new(0, 10, 0, 35); bar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            local fill = Instance.new("Frame", bar)
+            fill.Size = UDim2.new((default-min)/(max-min), 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(255, 245, 100)
+            
+            local dragging = false
+            local function update(input)
+                local p = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+                local v = math.floor(min + (max-min)*p)
+                fill.Size = UDim2.new(p, 0, 1, 0); label.Text = text.." : "..v
+                callback(v)
+            end
+            sFrame.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = true end end)
+            UserInputService.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+            UserInputService.InputChanged:Connect(function(i) if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then update(i) end end)
+        end
+        
+        function elements:AddButton(text, callback)
+            local b = Instance.new("TextButton", page)
+            b.Size = UDim2.new(1, -10, 0, 40); b.BackgroundColor3 = Color3.fromRGB(30,30,30); b.Text = text; b.TextColor3 = Color3.fromRGB(255,255,255)
+            Instance.new("UICorner", b)
+            b.MouseButton1Click:Connect(callback)
+        end
+        return elements
+    end
+    return Library
+end
+
+-- === KHỞI TẠO MENU ===
+local win = Library:CreateWindow()
+
+local combat = win:CreateTab("Combat")
+combat:AddToggle("Silent Aim", function(v) 
+    _G.TokaiConfig.AimEnabled = v 
+    _G.FovOutline.Visible = (v and _G.TokaiConfig.FovVisible)
+    _G.FovInline.Visible = (v and _G.TokaiConfig.FovVisible)
+end)
+combat:AddToggle("Wall Check", function(v) _G.TokaiConfig.WallCheck = v end)
+combat:AddSlider("FOV Size", 50, 600, 150, function(v)
+    _G.TokaiConfig.FovRadius = v
+    _G.FovOutline.Radius = v
+    _G.FovInline.Radius = v
+end)
+
+local visuals = win:CreateTab("Visuals")
+visuals:AddToggle("Enemy ESP (Male)", function(v)
+    _G.TokaiConfig.EspEnabled = v
+    if not v then UpdateESP() end
+end)
+visuals:AddToggle("Show FOV Circle", function(v)
+    _G.TokaiConfig.FovVisible = v
+    if _G.TokaiConfig.AimEnabled then
+        _G.FovOutline.Visible = v
+        _G.FovInline.Visible = v
+    end
+end)
+
+local settings = win:CreateTab("Settings")
+settings:AddButton("Destroy UI", function() CleanupOldUI() end)
+
+-- Cập nhật FOV vị trí
+RunService.RenderStepped:Connect(function()
+    local Center = Camera.ViewportSize / 2
+    _G.FovOutline.Position = Center
+    _G.FovInline.Position = Center
+end)
