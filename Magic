@@ -183,7 +183,7 @@ end
 -- [[ RAYFIELD UI ]]
 ------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({ Name = "⚔️🐧tokai hub ULTIMATE (BRM5)", Theme = "Default" })
+local Window = Rayfield:CreateWindow({ Name = "⚔️🐧tokai hub test 6/10000 (BRM5)", Theme = "Default" })
 
 local CombatTab = Window:CreateTab("Combat ⚔️")
 CombatTab:CreateToggle({ Name = "Hitbox Expander (Spoof)", CurrentValue = false, Callback = function(v) silentEnabled = v end })
