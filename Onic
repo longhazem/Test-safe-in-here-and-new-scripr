@@ -1,0 +1,425 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+
+-- Hàm dọn dẹp UI cũ (Tránh bị đè UI khi chạy lại script)
+local function CleanupOldUI()
+    local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
+    if oldUI then
+        oldUI:Destroy()
+    end
+end
+CleanupOldUI()
+
+-- Lưu trữ cấu hình toàn cục
+_G.TokaiConfig = _G.TokaiConfig or {}
+
+-- Danh sách 10 hình nền của bạn
+local BackgroundList = {
+    "rbxthumb://type=Asset&id=13605715274&w=420&h=420",
+    "rbxthumb://type=Asset&id=10935179737&w=420&h=420",
+    "rbxthumb://type=Asset&id=97182163526089&w=420&h=420",
+    "rbxthumb://type=Asset&id=114016973837508&w=420&h=420",
+    "rbxthumb://type=Asset&id=101612750444882&w=420&h=420",
+    "rbxthumb://type=Asset&id=2014971747&w=420&h=420",
+    "rbxthumb://type=Asset&id=101959737652480&w=420&h=420",
+    "rbxthumb://type=Asset&id=110802555840064&w=420&h=420",
+    "rbxthumb://type=Asset&id=598493435&w=420&h=420",
+    "rbxthumb://type=Asset&id=10007194277&w=420&h=420"
+}
+
+if not _G.BackgroundState then
+    _G.BackgroundState = {
+        CurrentIndex = 1,
+        LastUpdate = tick()
+    }
+end
+
+local function PlayCustomClick()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://126347354635406"
+    sound.Volume = 0.8
+    sound.Parent = SoundService
+    sound:Play()
+    sound.Ended:Connect(function() sound:Destroy() end)
+end
+
+local Library = {}
+
+function Library:CreateWindow()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "TOKAIHUB"
+    screenGui.Parent = (gethui and gethui()) or game.CoreGui
+    screenGui.ResetOnSpawn = false
+
+    local mainSize = UDim2.new(0, 520, 0, 320)
+    local logoID = "rbxthumb://type=Asset&id=99217897221957&w=420&h=420"
+    local NEON_COLOR = Color3.fromRGB(0, 255, 255) -- Màu xanh nước biển Neon
+
+    -- Nút mở Menu (Logo tròn)
+    local openBtn = Instance.new("ImageButton", screenGui)
+    openBtn.Name = "OpenButton"
+    openBtn.Size = UDim2.new(0, 55, 0, 55)
+    openBtn.Position = UDim2.new(0, 20, 0.5, -27)
+    openBtn.Visible = false
+    openBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    openBtn.BorderSizePixel = 0
+    openBtn.Image = logoID
+    openBtn.ZIndex = 100
+    Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
+    local openStroke = Instance.new("UIStroke", openBtn)
+    openStroke.Thickness = 2
+    openStroke.Color = NEON_COLOR
+
+    -- Frame chính (Main UI)
+    local main = Instance.new("Frame", screenGui)
+    main.Name = "MainFrame"
+    main.Size = UDim2.new(0, 0, 0, 0)
+    main.Position = UDim2.new(0.5, 0, 0.5, 0)
+    main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+    main.BackgroundTransparency = 0.2
+    main.BorderSizePixel = 0
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.ClipsDescendants = true
+    main.Active = true
+    
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+    local mainStroke = Instance.new("UIStroke", main)
+    mainStroke.Thickness = 2
+    mainStroke.Color = NEON_COLOR
+
+    -- Ảnh nền chính
+    local mainBg = Instance.new("ImageLabel", main)
+    mainBg.Name = "Background"
+    mainBg.Size = UDim2.new(1, 0, 1, 0)
+    mainBg.BackgroundTransparency = 1
+    mainBg.Image = BackgroundList[_G.BackgroundState.CurrentIndex]
+    mainBg.ImageTransparency = 0.4
+    mainBg.ScaleType = Enum.ScaleType.Crop
+    mainBg.ZIndex = 1
+    Instance.new("UICorner", mainBg).CornerRadius = UDim.new(0, 10)
+
+    -- Hiệu ứng mở UI (Tween)
+    TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = mainSize}):Play()
+
+    -- Vòng lặp đổi hình nền (Cứ 300 giây/5 phút đổi một lần)
+    task.spawn(function()
+        while task.wait(1) do
+            if not screenGui.Parent then break end
+            if tick() - _G.BackgroundState.LastUpdate >= 300 then
+                _G.BackgroundState.LastUpdate = tick()
+                _G.BackgroundState.CurrentIndex = (_G.BackgroundState.CurrentIndex % #BackgroundList) + 1
+                local fadeOut = TweenService:Create(mainBg, TweenInfo.new(1.5), {ImageTransparency = 1})
+                fadeOut:Play()
+                fadeOut.Completed:Wait()
+                mainBg.Image = BackgroundList[_G.BackgroundState.CurrentIndex]
+                TweenService:Create(mainBg, TweenInfo.new(1.5), {ImageTransparency = 0.4}):Play()
+            end
+        end
+    end)
+
+    -- Sidebar (Thanh bên trái)
+    local sidebar = Instance.new("Frame", main)
+    sidebar.Name = "Sidebar"
+    sidebar.Size = UDim2.new(0, 150, 1, 0)
+    sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    sidebar.BackgroundTransparency = 0.4
+    sidebar.ZIndex = 10
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
+
+    local header = Instance.new("Frame", sidebar)
+    header.Size = UDim2.new(1, 0, 0, 60)
+    header.BackgroundTransparency = 1
+    header.ZIndex = 11
+
+    local logoImg = Instance.new("ImageLabel", header)
+    logoImg.Size = UDim2.new(0, 35, 0, 35)
+    logoImg.Position = UDim2.new(0, 12, 0.5, -17)
+    logoImg.BackgroundTransparency = 1
+    logoImg.Image = logoID
+    logoImg.ZIndex = 12
+    Instance.new("UICorner", logoImg).CornerRadius = UDim.new(1, 0)
+
+    local titleText = Instance.new("TextLabel", header)
+    titleText.Size = UDim2.new(1, -55, 1, 0)
+    titleText.Position = UDim2.new(0, 52, 0, 0)
+    titleText.BackgroundTransparency = 1
+    titleText.Text = "TOKAI HUB"
+    titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleText.Font = Enum.Font.GothamBold
+    titleText.TextSize = 13
+    titleText.TextXAlignment = Enum.TextXAlignment.Left
+    titleText.ZIndex = 12
+
+    -- Vùng chứa các trang nội dung
+    local pages = Instance.new("Frame", main)
+    pages.Name = "Pages"
+    pages.Size = UDim2.new(1, -170, 1, -20)
+    pages.Position = UDim2.new(0, 160, 0, 10)
+    pages.BackgroundTransparency = 1
+    pages.ZIndex = 20
+
+    -- Danh sách các nút Tab trong sidebar
+    local tabListScroll = Instance.new("ScrollingFrame", sidebar)
+    tabListScroll.Size = UDim2.new(1, 0, 1, -70)
+    tabListScroll.Position = UDim2.new(0, 0, 0, 65)
+    tabListScroll.BackgroundTransparency = 1
+    tabListScroll.BorderSizePixel = 0
+    tabListScroll.ScrollBarThickness = 0
+    tabListScroll.ZIndex = 11
+    local tabLayout = Instance.new("UIListLayout", tabListScroll)
+    tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabLayout.Padding = UDim.new(0, 6)
+
+    -- HÀM TẠO VIỀN NEON CHO TAG (Đúng yêu cầu ảnh bạn gửi)
+    local function ApplyNeonTag(target)
+        if target:FindFirstChild("NeonGlow") then target.NeonGlow:Destroy() end
+        
+        local glow = Instance.new("ImageLabel", target)
+        glow.Name = "NeonGlow"
+        glow.BackgroundTransparency = 1
+        glow.Image = "rbxassetid://1316045217" -- Asset cho hiệu ứng hào quang
+        glow.ImageColor3 = NEON_COLOR
+        glow.ScaleType = Enum.ScaleType.Slice
+        glow.SliceCenter = Rect.new(10, 10, 118, 118)
+        glow.AnchorPoint = Vector2.new(0.5, 0.5)
+        glow.Position = UDim2.new(0.5, 0, 0.5, 0)
+        glow.Size = UDim2.new(1, 15, 1, 15) -- Lớn hơn nút một chút
+        glow.ZIndex = target.ZIndex - 1
+        
+        -- Hiệu ứng Neon thở
+        task.spawn(function()
+            while glow and glow.Parent do
+                TweenService:Create(glow, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {ImageTransparency = 0.2}):Play()
+                task.wait(1.2)
+                TweenService:Create(glow, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {ImageTransparency = 0.7}):Play()
+                task.wait(1.2)
+            end
+        end)
+    end
+
+    local firstTab = true
+    function Library:CreateTab(name)
+        local page = Instance.new("ScrollingFrame", pages)
+        page.Name = name .. "Page"
+        page.Size = UDim2.new(1, 0, 1, 0)
+        page.BackgroundTransparency = 1
+        page.BorderSizePixel = 0
+        page.Visible = false
+        page.ScrollBarThickness = 2
+        page.ScrollBarImageColor3 = NEON_COLOR
+        page.ZIndex = 21
+        Instance.new("UIListLayout", page).Padding = UDim.new(0, 10)
+
+        local tabBtn = Instance.new("TextButton", tabListScroll)
+        tabBtn.Name = name .. "Tab"
+        tabBtn.Size = UDim2.new(0, 130, 0, 36)
+        tabBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        tabBtn.BackgroundTransparency = 0.5
+        tabBtn.Text = name
+        tabBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+        tabBtn.Font = Enum.Font.GothamSemibold
+        tabBtn.TextSize = 13
+        tabBtn.ZIndex = 15
+        Instance.new("UICorner", tabBtn)
+        local tabStroke = Instance.new("UIStroke", tabBtn)
+        tabStroke.Thickness = 0; tabStroke.Color = NEON_COLOR
+
+        tabBtn.MouseButton1Click:Connect(function()
+            PlayCustomClick()
+            -- Tắt tất cả các trang khác
+            for _, v in pairs(pages:GetChildren()) do if v:IsA("ScrollingFrame") then v.Visible = false end end
+            -- Reset tất cả các Tab Button
+            for _, v in pairs(tabListScroll:GetChildren()) do 
+                if v:IsA("TextButton") then 
+                    v.TextColor3 = Color3.fromRGB(180, 180, 180)
+                    v:FindFirstChildOfClass("UIStroke").Thickness = 0
+                    if v:FindFirstChild("NeonGlow") then v.NeonGlow:Destroy() end
+                end 
+            end
+            -- Bật trang hiện tại và hiệu ứng Neon
+            page.Visible = true
+            tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            tabStroke.Thickness = 1.5
+            ApplyNeonTag(tabBtn)
+        end)
+
+        if firstTab then
+            task.delay(0.1, function()
+                page.Visible = true
+                tabStroke.Thickness = 1.5
+                ApplyNeonTag(tabBtn)
+                tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end)
+            firstTab = false
+        end
+
+        local elements = {}
+
+        -- HÀM THÊM THANH KÉO (SLIDER)
+        function elements:AddSlider(text, min, max, default, callback)
+            local sliderFrame = Instance.new("Frame", page)
+            sliderFrame.Size = UDim2.new(1, -10, 0, 50)
+            sliderFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            Instance.new("UICorner", sliderFrame)
+            
+            local label = Instance.new("TextLabel", sliderFrame)
+            label.Size = UDim2.new(1, -60, 0, 25); label.Position = UDim2.new(0, 15, 0, 5)
+            label.BackgroundTransparency = 1; label.Text = text; label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            label.Font = Enum.Font.Gotham; label.TextSize = 13; label.TextXAlignment = Enum.TextXAlignment.Left
+
+            local valueLabel = Instance.new("TextLabel", sliderFrame)
+            valueLabel.Size = UDim2.new(0, 40, 0, 25); valueLabel.Position = UDim2.new(1, -50, 0, 5)
+            valueLabel.BackgroundTransparency = 1; valueLabel.Text = tostring(default); valueLabel.TextColor3 = NEON_COLOR
+            valueLabel.Font = Enum.Font.GothamBold; valueLabel.TextSize = 13
+
+            local barBg = Instance.new("Frame", sliderFrame)
+            barBg.Size = UDim2.new(1, -30, 0, 6); barBg.Position = UDim2.new(0, 15, 1, -15)
+            barBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50); Instance.new("UICorner", barBg)
+
+            local barFill = Instance.new("Frame", barBg)
+            barFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+            barFill.BackgroundColor3 = NEON_COLOR; Instance.new("UICorner", barFill)
+            
+            local dragging = false
+            local function update(input)
+                local pos = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
+                local val = math.floor(min + (max - min) * pos)
+                barFill.Size = UDim2.new(pos, 0, 1, 0)
+                valueLabel.Text = tostring(val)
+                callback(val)
+            end
+
+            barBg.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true; update(input)
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    update(input)
+                end
+            end)
+
+            UserInputService.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end)
+        end
+
+        function elements:AddToggle(text, callback)
+            local toggleFrame = Instance.new("TextButton", page)
+            toggleFrame.Size = UDim2.new(1, -10, 0, 40)
+            toggleFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); toggleFrame.Text = ""
+            Instance.new("UICorner", toggleFrame)
+            
+            local label = Instance.new("TextLabel", toggleFrame)
+            label.Size = UDim2.new(1, -60, 1, 0); label.Position = UDim2.new(0, 15, 0, 0)
+            label.BackgroundTransparency = 1; label.Text = text; label.TextColor3 = Color3.fromRGB(255, 255, 255)
+            label.Font = Enum.Font.Gotham; label.TextSize = 13; label.TextXAlignment = Enum.TextXAlignment.Left
+
+            local tglBg = Instance.new("Frame", toggleFrame)
+            tglBg.Size = UDim2.new(0, 42, 0, 22); tglBg.Position = UDim2.new(1, -52, 0.5, -11)
+            tglBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60); Instance.new("UICorner", tglBg).CornerRadius = UDim.new(1, 0)
+
+            local tglDot = Instance.new("Frame", tglBg)
+            tglDot.Size = UDim2.new(0, 18, 0, 18); tglDot.Position = UDim2.new(0, 2, 0.5, -9)
+            tglDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Instance.new("UICorner", tglDot).CornerRadius = UDim.new(1, 0)
+
+            local enabled = _G.TokaiConfig[name.."_"..text] or false
+            local function updateToggle()
+                TweenService:Create(tglDot, TweenInfo.new(0.2), {Position = enabled and UDim2.new(0, 22, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}):Play()
+                TweenService:Create(tglBg, TweenInfo.new(0.2), {BackgroundColor3 = enabled and NEON_COLOR or Color3.fromRGB(60, 60, 60)}):Play()
+            end
+            updateToggle()
+
+            toggleFrame.MouseButton1Click:Connect(function()
+                PlayCustomClick(); enabled = not enabled
+                _G.TokaiConfig[name.."_"..text] = enabled
+                updateToggle()
+                callback(enabled)
+            end)
+        end
+
+        function elements:AddButton(text, callback)
+            local btn = Instance.new("TextButton", page)
+            btn.Size = UDim2.new(1, -10, 0, 40); btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+            btn.Text = "  " .. text; btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.Gotham; btn.TextSize = 13; btn.TextXAlignment = Enum.TextXAlignment.Left
+            Instance.new("UICorner", btn)
+            btn.MouseButton1Click:Connect(function() PlayCustomClick(); callback() end)
+        end
+        return elements
+    end
+
+    -- Nút đóng UI
+    local closeBtn = Instance.new("TextButton", main)
+    closeBtn.Size = UDim2.new(0, 30, 0, 30); closeBtn.Position = UDim2.new(1, -35, 0, 5)
+    closeBtn.BackgroundTransparency = 1; closeBtn.Text = "×"; closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255); closeBtn.TextSize = 25; closeBtn.ZIndex = 50
+    closeBtn.MouseButton1Click:Connect(function()
+        PlayCustomClick()
+        TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)}):Play()
+        task.delay(0.4, function() main.Visible = false; openBtn.Visible = true end)
+    end)
+
+    -- Hệ thống kéo thả
+    local function Drag(obj)
+        local dragging, dragStart, startPos
+        obj.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true; dragStart = input.Position; startPos = obj.Position
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
+    end
+    Drag(main); Drag(openBtn)
+    
+    openBtn.MouseButton1Click:Connect(function()
+        PlayCustomClick(); openBtn.Visible = false; main.Visible = true; main.Position = UDim2.new(0.5, 0, 0.5, 0)
+        TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = mainSize}):Play()
+    end)
+
+    return Library
+end
+
+-- ==========================================
+-- THIẾT LẬP MENU CỦA BẠN
+-- ==========================================
+local win = Library:CreateWindow()
+
+-- Tab chính
+local mainTab = win:CreateTab("Main")
+
+-- TEST THANH KÉO (SLIDER) 0-100
+mainTab:AddSlider("WalkSpeed", 0, 100, 16, function(v)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
+    end
+end)
+
+mainTab:AddToggle("Auto Farm", function(s) print("Farm is:", s) end)
+mainTab:AddButton("Click Me!", function() print("Button Clicked!") end)
+
+-- Tab khác
+local miscTab = win:CreateTab("Misc")
+miscTab:AddSlider("Jump Power", 0, 200, 50, function(v)
+    if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        game.Players.LocalPlayer.Character.Humanoid.JumpPower = v
+    end
+end)
+
+-- Tab cài đặt
+local settingsTab = win:CreateTab("Settings")
+settingsTab:AddButton("Copy Discord Link", function()
+    if setclipboard then setclipboard("https://discord.gg/nn783R2fK2") end
+end)
+settingsTab:AddButton("Destroy UI", function() CleanupOldUI() end)
