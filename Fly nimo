@@ -1,122 +1,82 @@
+-- BRM5 Fly Fix
 getgenv().CharSettings = {
     FlyEnabled = false,
-    FlySpeed = 50
+    FlySpeed = 60 -- BRM5 map rộng nên để tầm 60-80 cho nhanh
 }
-local CS = getgenv().CharSettings
 
+local settings = getgenv().CharSettings
+local uis = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
 local players = game:GetService("Players")
-local workspace = game:GetService("Workspace")
-local user_input_service = game:GetService("UserInputService")
-local replicated_storage = game:GetService("ReplicatedStorage")
-local Vector3_new = Vector3.new
-local CFrame_new = CFrame.new
+local lp = players.LocalPlayer
 
-local function findModule(name)
-    local rf = game:GetService("ReplicatedFirst")
-    for _, flux_name in ipairs({"Flux_client", "Flux/client", "Flux"}) do
-        local flux = rf:FindFirstChild(flux_name)
-        if flux then
-            local found = flux:FindFirstChild(name, true)
-            if found then return found end
+-- Hàm tìm kiếm module sâu hơn cho BRM5
+local function getBRM5Controller()
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "Update") and rawget(v, "_localActor") then
+            return v
         end
     end
-    local found = rf:FindFirstChild(name, true)
-    if found then return found end
-
-    local Packages = replicated_storage:FindFirstChild("Packages")
-    local RequireMod = Packages and Packages:FindFirstChild("require")
-    if RequireMod then
-        local success, Loader = pcall(require, RequireMod)
-        if success and Loader and Loader._modules and Loader._modules[name] then
-            return Loader._modules[name]
-        end
-    end
-    
-    found = replicated_storage:FindFirstChild(name, true)
-    if found and found:IsA("ModuleScript") then return found end
-
     return nil
 end
 
-task.spawn(function()
-    local CharacterController = nil
-    while true do
-        if not CharacterController then
-            local mod = findModule("CharacterController")
-            if mod then
-                local success, result = pcall(require, mod)
-                if success and result and result.Update then
-                    CharacterController = result
+local controller = getBRM5Controller()
 
-                    if not getgenv().OldCharUpdate then
-                        getgenv().OldCharUpdate = CharacterController.Update
-                    end
-                    
-                    CharacterController.Update = function(self, inputVector, deltaTime)
-                        if not self or not self._localActor then return getgenv().OldCharUpdate(self, inputVector, deltaTime) end
+-- Vòng lặp chính để xử lý bay (Thay vì Hook hàm Update của game)
+runService.Heartbeat:Connect(function(dt)
+    if not settings.FlyEnabled then return end
+    
+    local char = lp.Character
+    if not char then return end
+    local root = char:FindFirstChild("Root") or char.PrimaryPart
+    if not root then return end
 
-                        local baseWeight = self._weightMulti or 1
+    -- Vô hiệu hóa trọng lực của BRM5 bằng cách ép Velocity
+    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    
+    local camCF = workspace.CurrentCamera.CFrame
+    local moveDir = Vector3.new(0, 0, 0)
 
-                        if CS.FlyEnabled then
-                            self.VelocityGravity = 0
-                            self.HeightState = 0 
-                            self.IsGrounded = true
-                            
-                            local camCF = workspace.CurrentCamera.CFrame
-                            local dir = Vector3_new(0, 0, 0)
+    -- Phím di chuyển cơ bản
+    if uis:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+    if uis:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+    if uis:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+    if uis:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+    
+    -- Bay lên/xuống
+    if uis:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+    if uis:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3.new(0, 1, 0) end
 
-                            if inputVector.Magnitude > 0 then
-                                dir = dir + (camCF.LookVector * -inputVector.Y) + (camCF.RightVector * inputVector.X)
-                            end
-
-                            if user_input_service:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3_new(0, 1, 0) end
-                            if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3_new(0, 1, 0) end
-
-                            if dir.Magnitude > 0 then
-                                local flySpeedVal = tonumber(CS.FlySpeed) or 50
-                                local flySprint = user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and 2.5 or 1
-                                local nextPos = self._position + (dir.Unit * flySpeedVal * flySprint * deltaTime)
-                                
-                                self._position = nextPos
-                                self._lastSafePosition = nextPos
-                                if self._localActor then
-                                    self._localActor.SimulatedPosition = nextPos
-                                    self._localActor.Grounded = true
-                                    self._localActor.Sprinting = false
-                                end
-                            end
-
-                            local char = self._localActor and (self._localActor.Character or self._localActor._model)
-                            if char then
-                                local root = char:FindFirstChild("Root") or char.PrimaryPart
-                                if root then
-                                     root.Velocity = Vector3_new(0,0,0)
-                                     root.AssemblyLinearVelocity = Vector3_new(0,0,0)
-                                     local lookDir = camCF.LookVector
-                                     root.CFrame = CFrame_new(self._position, self._position + lookDir)
-                                end
-                            end
-                            self._weightMulti = baseWeight
-                            return 
-                        end
-
-                        self._weightMulti = baseWeight
-                        return getgenv().OldCharUpdate(self, inputVector, deltaTime)
-                    end
-                    print("Hook CharacterController thanh cong!")
-                    break 
-                end
-            end
+    if moveDir.Magnitude > 0 then
+        local speed = settings.FlySpeed
+        if uis:IsKeyDown(Enum.KeyCode.LeftShift) then speed = speed * 2 end
+        
+        -- Ép CFrame để bay (Đây là cách duy nhất qua mặt được controller của BRM5)
+        root.CFrame = root.CFrame + (moveDir.Unit * speed * dt)
+    end
+    
+    -- Cập nhật cho Controller của game để không bị giật ngược (Anti-Teleport nhẹ)
+    if controller then
+        controller._position = root.Position
+        if controller._localActor then
+            controller._localActor.SimulatedPosition = root.Position
         end
-        task.wait(2)
     end
 end)
 
-local FlyKey = Enum.KeyCode.T
-user_input_service.InputBegan:Connect(function(input, typing)
+-- Bật/Tắt
+uis.InputBegan:Connect(function(input, typing)
     if typing then return end
-    if input.KeyCode == FlyKey then
-        CS.FlyEnabled = not CS.FlyEnabled
-        print("Fly status: " .. tostring(CS.FlyEnabled))
+    if input.KeyCode == Enum.KeyCode.T then
+        settings.FlyEnabled = not settings.FlyEnabled
+        print("BRM5 Fly:", settings.FlyEnabled)
+        
+        -- Reset vận tốc khi tắt để không bị rớt cái rầm
+        if not settings.FlyEnabled and lp.Character then
+            local root = lp.Character:FindFirstChild("Root") or lp.Character.PrimaryPart
+            if root then root.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
+        end
     end
 end)
+
+warn(">>> BRM5 FLY LOADED - PRESS T TO TOGGLE 🗿")
