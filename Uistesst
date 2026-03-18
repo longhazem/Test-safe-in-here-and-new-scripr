@@ -145,9 +145,17 @@ function Library:CreateWindow()
     header.BackgroundTransparency = 1
     header.ZIndex = 11
 
+    local logoImg = Instance.new("ImageLabel", header)
+    logoImg.Size = UDim2.new(0, 28, 0, 28)
+    logoImg.Position = UDim2.new(0, 12, 0.5, -14)
+    logoImg.BackgroundTransparency = 1
+    logoImg.Image = logoID
+    logoImg.ZIndex = 12
+    Instance.new("UICorner", logoImg).CornerRadius = UDim.new(1, 0)
+
     local titleText = Instance.new("TextLabel", header)
     titleText.Size = UDim2.new(0, 120, 1, 0)
-    titleText.Position = UDim2.new(0, 15, 0, 0)
+    titleText.Position = UDim2.new(0, 48, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = "TOKAI HUB"
     titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -222,11 +230,9 @@ function Library:CreateWindow()
         for _, pg in pairs(pages:GetChildren()) do
             if pg:IsA("ScrollingFrame") then
                 for _, el in pairs(pg:GetChildren()) do
-                    if el:IsA("TextButton") or el:IsA("Frame") then
-                        local label = el:FindFirstChildOfClass("TextLabel")
-                        if label then
-                            el.Visible = label.Text:lower():find(input) and true or false
-                        end
+                    local label = el:FindFirstChildOfClass("TextLabel")
+                    if label then
+                        el.Visible = label.Text:lower():find(input) and true or false
                     end
                 end
             end
@@ -294,13 +300,12 @@ function Library:CreateWindow()
             tglDot.Size = UDim2.new(0, 18, 0, 18); tglDot.Position = UDim2.new(0, 2, 0.5, -9)
             tglDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             Instance.new("UICorner", tglDot).CornerRadius = UDim.new(1, 0)
-            local enabled = _G.TokaiConfig[name.."_"..text] or false
+            local enabled = false
             local function update()
                 TweenService:Create(tglDot, TweenInfo.new(0.2), {Position = enabled and UDim2.new(0, 22, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}):Play()
                 TweenService:Create(tglBg, TweenInfo.new(0.2), {BackgroundColor3 = enabled and Color3.fromRGB(0, 255, 127) or Color3.fromRGB(65, 65, 65)}):Play()
             end
-            update()
-            toggleFrame.MouseButton1Click:Connect(function() PlayCustomClick(); enabled = not enabled; _G.TokaiConfig[name.."_"..text] = enabled; update(); callback(enabled) end)
+            toggleFrame.MouseButton1Click:Connect(function() PlayCustomClick(); enabled = not enabled; update(); callback(enabled) end)
         end
 
         function elements:AddButton(text, callback)
@@ -310,6 +315,31 @@ function Library:CreateWindow()
             btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 14; btn.TextXAlignment = Enum.TextXAlignment.Left
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
             btn.MouseButton1Click:Connect(function() PlayCustomClick(); callback() end)
+        end
+
+        function elements:AddSlider(text, min, max, default, callback)
+            local sliderFrame = Instance.new("Frame", page)
+            sliderFrame.Size = UDim2.new(1, -4, 0, 50); sliderFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35); sliderFrame.BackgroundTransparency = 0.2
+            Instance.new("UICorner", sliderFrame).CornerRadius = UDim.new(0, 8)
+            local label = Instance.new("TextLabel", sliderFrame)
+            label.Size = UDim2.new(1, -20, 0, 25); label.Position = UDim2.new(0, 15, 0, 5); label.BackgroundTransparency = 1
+            label.Text = text .. " : " .. default; label.TextColor3 = Color3.fromRGB(255, 255, 255); label.Font = Enum.Font.GothamSemibold; label.TextSize = 13; label.TextXAlignment = Enum.TextXAlignment.Left
+            local barBg = Instance.new("Frame", sliderFrame)
+            barBg.Size = UDim2.new(1, -30, 0, 6); barBg.Position = UDim2.new(0, 15, 1, -15); barBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+            local barFill = Instance.new("Frame", barBg)
+            barFill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0); barFill.BackgroundColor3 = Color3.fromRGB(0, 255, 127)
+            Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
+            local sliding = false
+            local function move(input)
+                local pos = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
+                barFill.Size = UDim2.new(pos, 0, 1, 0)
+                local val = math.floor(min + (max - min) * pos)
+                label.Text = text .. " : " .. val; callback(val)
+            end
+            barBg.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then sliding = true; move(input) end end)
+            UserInputService.InputChanged:Connect(function(input) if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then move(input) end end)
+            UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then sliding = false end end)
         end
 
         function elements:AddKeybind(text, default, callback)
@@ -365,9 +395,10 @@ function Library:CreateWindow()
 end
 
 local win = Library:CreateWindow()
-local mainTab = win:CreateTab("Combat")
-mainTab:AddToggle("Kill Aura", function(s) end)
+local mainTab = win:CreateTab("Test Tools")
+mainTab:AddToggle("Toggle Test", function(s) end)
+mainTab:AddSlider("Slider Test", 0, 500, 100, function(v) end)
+mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
 
 local settingTab = win:CreateTab("Settings")
 settingTab:AddKeybind("Toggle Menu Key", _G.ToggleKey, function(key) end)
-settingTab:AddButton("Destroy UI", function() CleanupOldUI() end)
