@@ -1,78 +1,69 @@
+-- Cấu hình
 getgenv().CharSettings = {
     FlyEnabled = false,
-    FlySpeed = 60
+    FlySpeed = 50,
+    VerticalSpeed = 40
 }
 
-local user_input_service = game:GetService("UserInputService")
 local run_service = game:GetService("RunService")
+local user_input_service = game:GetService("UserInputService")
 local workspace = game:GetService("Workspace")
 
--- Tạo các biến lực vật lý
-local bv, bg = nil, nil
-
-local function toggleFly()
-    getgenv().CharSettings.FlyEnabled = not getgenv().CharSettings.FlyEnabled
-    print("Trạng thái Fly: ", getgenv().CharSettings.FlyEnabled)
-    
-    local player = game.Players.LocalPlayer
-    local char = player.Character or player.CharacterAdded:Wait()
-    -- Tìm phần thân chính dựa trên ảnh Dex của bạn (Male)
-    local root = char:FindFirstChild("Male") or char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
-
-    if getgenv().CharSettings.FlyEnabled then
-        -- Tạo lực đẩy để bay
-        bv = Instance.new("BodyVelocity")
-        bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
-        bv.Velocity = Vector3.new(0, 0, 0)
-        bv.Parent = root
-        
-        -- Giữ hướng nhìn của nhân vật
-        bg = Instance.new("BodyGyro")
-        bg.MaxTorque = Vector3.new(1e6, 1e6, 1e6)
-        bg.P = 10000
-        bg.CFrame = root.CFrame
-        bg.Parent = root
-    else
-        -- Xóa lực khi tắt fly
-        if bv then bv:Destroy() end
-        if bg then bg:Destroy() end
-    end
+-- Hàm tìm Part chính của nhân vật (Dựa trên ảnh Dex bạn gửi là 'Male')
+local function getRoot()
+    local char = game.Players.LocalPlayer.Character
+    if not char then return nil end
+    -- BRM5 dùng Model 'Male', chúng ta tìm Part nằm trong đó
+    return char:FindFirstChild("Male") or char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
 end
 
--- Vòng lặp cập nhật hướng bay liên tục
-run_service.RenderStepped:Connect(function()
-    if getgenv().CharSettings.FlyEnabled and bv and bg then
-        local player = game.Players.LocalPlayer
-        local char = player.Character
-        local root = char and (char:FindFirstChild("Male") or char.PrimaryPart)
-        local cam = workspace.CurrentCamera
-        
-        if root then
-            local moveDir = Vector3.new(0, 0, 0)
-            local speed = getgenv().CharSettings.FlySpeed
-            
-            -- Kiểm tra phím di chuyển
-            if user_input_service:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + cam.CFrame.LookVector end
-            if user_input_service:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - cam.CFrame.LookVector end
-            if user_input_service:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + cam.CFrame.RightVector end
-            if user_input_service:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - cam.CFrame.RightVector end
-            if user_input_service:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
-            if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3_new(0, 1, 0) end
-
-            -- Áp dụng vận tốc
-            bv.Velocity = moveDir.Unit * (user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and speed * 2 or speed)
-            if moveDir.Magnitude == 0 then bv.Velocity = Vector3.new(0, 0, 0) end
-            
-            -- Xoay nhân vật theo Camera
-            bg.CFrame = cam.CFrame
-        end
+-- Vòng lặp ÉP VỊ TRÍ (Đây là phần quan trọng nhất)
+run_service.Stepped:Connect(function(_, deltaTime)
+    if not getgenv().CharSettings.FlyEnabled then return end
+    
+    local root = getRoot()
+    if not root then return end
+    
+    local camCF = workspace.CurrentCamera.CFrame
+    local moveDir = Vector3.new(0, 0, 0)
+    
+    -- Tính toán hướng di chuyển từ phím bấm
+    if user_input_service:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+    if user_input_service:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+    if user_input_service:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+    if user_input_service:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+    
+    -- Bay lên/xuống (Space/Ctrl)
+    if user_input_service:IsKeyDown(Enum.KeyCode.Space) then 
+        moveDir = moveDir + Vector3.new(0, 1, 0) 
     end
+    if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then 
+        moveDir = moveDir - Vector3.new(0, 1, 0) 
+    end
+
+    if moveDir.Magnitude > 0 then
+        local multiplier = user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and 2 or 1
+        local nextPos = root.Position + (moveDir.Unit * getgenv().CharSettings.FlySpeed * multiplier * deltaTime)
+        
+        -- ÉP CFrame liên tục để bypass trọng lực của game
+        root.CFrame = CFrame.new(nextPos, nextPos + camCF.LookVector)
+    end
+    
+    -- KHÓA VẬN TỐC: Quan trọng để không bị game kéo xuống đất
+    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 end)
 
--- Nhấn T để bật/tắt
+-- Phím tắt bật/tắt (T)
 user_input_service.InputBegan:Connect(function(input, typing)
     if typing then return end
     if input.KeyCode == Enum.KeyCode.T then
-        toggleFly()
+        getgenv().CharSettings.FlyEnabled = not getgenv().CharSettings.FlyEnabled
+        print("Fly BRM5: " .. (getgenv().CharSettings.FlyEnabled and "BẬT" or "TẮT"))
+        
+        -- Khi bật Fly, nhấc nhân vật lên một chút để thoát khỏi mặt đất
+        if getgenv().CharSettings.FlyEnabled then
+            local root = getRoot()
+            if root then root.CFrame = root.CFrame + Vector3.new(0, 5, 0) end
+        end
     end
 end)
