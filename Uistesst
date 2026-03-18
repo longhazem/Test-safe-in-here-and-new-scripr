@@ -12,6 +12,7 @@ end
 CleanupOldUI()
 
 _G.TokaiConfig = _G.TokaiConfig or {}
+_G.UILocked = false
 
 local BackgroundList = {
     "rbxthumb://type=Asset&id=13605715274&w=420&h=420",
@@ -54,7 +55,6 @@ function Library:CreateWindow()
     local logoID = "rbxthumb://type=Asset&id=99217897221957&w=420&h=420"
 
     local openBtn = Instance.new("ImageButton", screenGui)
-    openBtn.Name = "OpenButton"
     openBtn.Size = UDim2.new(0, 55, 0, 55)
     openBtn.Position = UDim2.new(0, 20, 0.5, -27)
     openBtn.Visible = false
@@ -71,7 +71,7 @@ function Library:CreateWindow()
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
-    main.ClipsDescendants = true
+    main.ClipsDescendants = false
     main.Active = true
     main.Parent = screenGui
     
@@ -92,7 +92,15 @@ function Library:CreateWindow()
     glowFrame.ImageTransparency = 0.4
     glowFrame.ZIndex = 0
 
-    local mainBg = Instance.new("ImageLabel", main)
+    local container = Instance.new("Frame", main)
+    container.Name = "Container"
+    container.Size = UDim2.new(1, 0, 1, 0)
+    container.BackgroundTransparency = 1
+    container.ClipsDescendants = true
+    container.ZIndex = 1
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 14)
+
+    local mainBg = Instance.new("ImageLabel", container)
     mainBg.Name = "Background"
     mainBg.Size = UDim2.new(1, 0, 1, 0)
     mainBg.BackgroundTransparency = 1
@@ -100,7 +108,6 @@ function Library:CreateWindow()
     mainBg.ImageTransparency = 0.65
     mainBg.ScaleType = Enum.ScaleType.Crop
     mainBg.ZIndex = 1
-    Instance.new("UICorner", mainBg).CornerRadius = UDim.new(0, 14)
 
     TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = mainSize}):Play()
 
@@ -119,7 +126,7 @@ function Library:CreateWindow()
         end
     end)
 
-    local header = Instance.new("Frame", main)
+    local header = Instance.new("Frame", container)
     header.Size = UDim2.new(1, 0, 0, 45)
     header.BackgroundTransparency = 1
     header.ZIndex = 11
@@ -133,7 +140,7 @@ function Library:CreateWindow()
     Instance.new("UICorner", logoImg).CornerRadius = UDim.new(1, 0)
 
     local titleText = Instance.new("TextLabel", header)
-    titleText.Size = UDim2.new(1, -100, 1, 0)
+    titleText.Size = UDim2.new(0, 120, 1, 0)
     titleText.Position = UDim2.new(0, 50, 0, 0)
     titleText.BackgroundTransparency = 1
     titleText.Text = "TOKAI HUB"
@@ -143,21 +150,61 @@ function Library:CreateWindow()
     titleText.TextXAlignment = Enum.TextXAlignment.Left
     titleText.ZIndex = 12
 
-    local closeBtn = Instance.new("TextButton", header)
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -40, 0.5, -15)
+    local toolContainer = Instance.new("Frame", header)
+    toolContainer.Size = UDim2.new(0, 260, 0, 30)
+    toolContainer.Position = UDim2.new(1, -275, 0.5, -15)
+    toolContainer.BackgroundTransparency = 1
+    toolContainer.ZIndex = 15
+    local toolLayout = Instance.new("UIListLayout", toolContainer)
+    toolLayout.FillDirection = Enum.FillDirection.Horizontal
+    toolLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    toolLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    toolLayout.Padding = UDim.new(0, 8)
+
+    local searchBox = Instance.new("TextBox", toolContainer)
+    searchBox.Size = UDim2.new(0, 130, 0, 26)
+    searchBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    searchBox.BackgroundTransparency = 0.3
+    searchBox.Text = ""
+    searchBox.PlaceholderText = "Search features..."
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.PlaceholderColor3 = Color3.fromRGB(180, 180, 180)
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.TextSize = 12
+    searchBox.ZIndex = 16
+    Instance.new("UICorner", searchBox).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIStroke", searchBox).Color = Color3.fromRGB(80, 80, 80)
+
+    local lockBtn = Instance.new("ImageButton", toolContainer)
+    lockBtn.Size = UDim2.new(0, 24, 0, 24)
+    lockBtn.BackgroundTransparency = 1
+    lockBtn.Image = "rbxassetid://10734950309"
+    lockBtn.ImageColor3 = Color3.fromRGB(200, 200, 200)
+    lockBtn.ZIndex = 16
+
+    local closeBtn = Instance.new("TextButton", toolContainer)
+    closeBtn.Size = UDim2.new(0, 26, 0, 26)
     closeBtn.BackgroundTransparency = 1
     closeBtn.Text = "×"
     closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 28
-    closeBtn.ZIndex = 50
+    closeBtn.ZIndex = 16
+
+    lockBtn.MouseButton1Click:Connect(function()
+        PlayCustomClick()
+        _G.UILocked = not _G.UILocked
+        TweenService:Create(lockBtn, TweenInfo.new(0.2), {
+            ImageColor3 = _G.UILocked and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(200, 200, 200)
+        }):Play()
+    end)
+
     closeBtn.MouseButton1Click:Connect(function()
         PlayCustomClick()
         TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)}):Play()
         task.delay(0.4, function() main.Visible = false; openBtn.Visible = true end)
     end)
 
-    local tabArea = Instance.new("ScrollingFrame", main)
+    local tabArea = Instance.new("ScrollingFrame", container)
     tabArea.Size = UDim2.new(1, -30, 0, 38)
     tabArea.Position = UDim2.new(0, 15, 0, 45)
     tabArea.BackgroundTransparency = 1
@@ -165,18 +212,30 @@ function Library:CreateWindow()
     tabArea.CanvasSize = UDim2.new(0, 0, 0, 0)
     tabArea.AutomaticCanvasSize = Enum.AutomaticSize.X
     tabArea.ZIndex = 11
-    
-    local tabListLayout = Instance.new("UIListLayout", tabArea)
-    tabListLayout.FillDirection = Enum.FillDirection.Horizontal
-    tabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    tabListLayout.Padding = UDim.new(0, 10)
-    tabListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    local tabLayout = Instance.new("UIListLayout", tabArea)
+    tabLayout.FillDirection = Enum.FillDirection.Horizontal
+    tabLayout.Padding = UDim.new(0, 10)
+    tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    local pages = Instance.new("Frame", main)
+    local pages = Instance.new("Frame", container)
     pages.Size = UDim2.new(1, -30, 1, -100)
     pages.Position = UDim2.new(0, 15, 0, 90)
     pages.BackgroundTransparency = 1
     pages.ZIndex = 20
+
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local input = searchBox.Text:lower()
+        for _, pg in pairs(pages:GetChildren()) do
+            if pg:IsA("ScrollingFrame") then
+                for _, el in pairs(pg:GetChildren()) do
+                    if el:IsA("TextButton") or el:IsA("TextLabel") then
+                        local content = el:FindFirstChildOfClass("TextLabel") and el:FindFirstChildOfClass("TextLabel").Text or el.Text
+                        el.Visible = content:lower():find(input) and true or false
+                    end
+                end
+            end
+        end
+    end)
 
     local firstTab = true
     function Library:CreateTab(name)
@@ -189,19 +248,17 @@ function Library:CreateWindow()
         local pageLayout = Instance.new("UIListLayout", page)
         pageLayout.Padding = UDim.new(0, 8)
         pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
         local tabBtn = Instance.new("TextButton", tabArea)
-        tabBtn.Size = UDim2.new(0, 100, 0, 32)
+        tabBtn.Size = UDim2.new(0, 95, 0, 32)
         tabBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         tabBtn.BackgroundTransparency = 0.3
         tabBtn.Text = name
-        tabBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        tabBtn.TextColor3 = Color3.fromRGB(160, 160, 160)
         tabBtn.Font = Enum.Font.GothamSemibold
         tabBtn.TextSize = 13
         tabBtn.ZIndex = 15
         Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 8)
-        
         local tabStroke = Instance.new("UIStroke", tabBtn)
         tabStroke.Thickness = 1.2
         tabStroke.Transparency = 1
@@ -212,39 +269,30 @@ function Library:CreateWindow()
             for _, v in pairs(pages:GetChildren()) do if v:IsA("ScrollingFrame") then v.Visible = false end end
             for _, v in pairs(tabArea:GetChildren()) do 
                 if v:IsA("TextButton") then 
-                    v.TextColor3 = Color3.fromRGB(150, 150, 150)
-                    v.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+                    v.TextColor3 = Color3.fromRGB(160, 160, 160)
                     v:FindFirstChildOfClass("UIStroke").Transparency = 1
                 end 
             end
             page.Visible = true
             tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            tabBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
             tabStroke.Transparency = 0
         end)
 
         if firstTab then
-            task.delay(0.1, function()
-                page.Visible = true
-                tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                tabBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-                tabStroke.Transparency = 0
-            end)
+            task.delay(0.1, function() page.Visible = true; tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255); tabStroke.Transparency = 0 end)
             firstTab = false
         end
 
         local elements = {}
-        
         function elements:AddSection(text)
             local sectionLbl = Instance.new("TextLabel", page)
-            sectionLbl.Size = UDim2.new(1, -10, 0, 30)
+            sectionLbl.Size = UDim2.new(1, -10, 0, 25)
             sectionLbl.BackgroundTransparency = 1
             sectionLbl.Text = text
-            sectionLbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+            sectionLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
             sectionLbl.Font = Enum.Font.GothamBold
             sectionLbl.TextSize = 13
             sectionLbl.TextXAlignment = Enum.TextXAlignment.Left
-            sectionLbl.ZIndex = 26
         end
 
         function elements:AddToggle(text, callback)
@@ -253,10 +301,8 @@ function Library:CreateWindow()
             toggleFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
             toggleFrame.BackgroundTransparency = 0.2
             toggleFrame.Text = ""
-            toggleFrame.AutoButtonColor = false
             toggleFrame.ZIndex = 25
             Instance.new("UICorner", toggleFrame).CornerRadius = UDim.new(0, 8)
-            
             local label = Instance.new("TextLabel", toggleFrame)
             label.Size = UDim2.new(1, -70, 1, 0)
             label.Position = UDim2.new(0, 15, 0, 0)
@@ -266,40 +312,23 @@ function Library:CreateWindow()
             label.Font = Enum.Font.GothamSemibold
             label.TextSize = 14
             label.TextXAlignment = Enum.TextXAlignment.Left
-            label.ZIndex = 26
-
             local tglBg = Instance.new("Frame", toggleFrame)
-            tglBg.Size = UDim2.new(0, 44, 0, 22)
+            tglBg.Size = UDim2.new(0, 42, 0, 22)
             tglBg.Position = UDim2.new(1, -55, 0.5, -11)
-            tglBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            tglBg.ZIndex = 26
+            tglBg.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
             Instance.new("UICorner", tglBg).CornerRadius = UDim.new(1, 0)
-
             local tglDot = Instance.new("Frame", tglBg)
             tglDot.Size = UDim2.new(0, 18, 0, 18)
             tglDot.Position = UDim2.new(0, 2, 0.5, -9)
             tglDot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            tglDot.ZIndex = 27
             Instance.new("UICorner", tglDot).CornerRadius = UDim.new(1, 0)
-
             local enabled = _G.TokaiConfig[name.."_"..text] or false
             local function update()
-                TweenService:Create(tglDot, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
-                    Position = enabled and UDim2.new(0, 24, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)
-                }):Play()
-                TweenService:Create(tglBg, TweenInfo.new(0.25), {
-                    BackgroundColor3 = enabled and Color3.fromRGB(0, 255, 127) or Color3.fromRGB(60, 60, 60)
-                }):Play()
+                TweenService:Create(tglDot, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {Position = enabled and UDim2.new(0, 22, 0.5, -9) or UDim2.new(0, 2, 0.5, -9)}):Play()
+                TweenService:Create(tglBg, TweenInfo.new(0.25), {BackgroundColor3 = enabled and Color3.fromRGB(0, 255, 127) or Color3.fromRGB(65, 65, 65)}):Play()
             end
             update()
-
-            toggleFrame.MouseButton1Click:Connect(function()
-                PlayCustomClick()
-                enabled = not enabled
-                _G.TokaiConfig[name.."_"..text] = enabled
-                update()
-                callback(enabled)
-            end)
+            toggleFrame.MouseButton1Click:Connect(function() PlayCustomClick(); enabled = not enabled; _G.TokaiConfig[name.."_"..text] = enabled; update(); callback(enabled) end)
         end
 
         function elements:AddButton(text, callback)
@@ -312,33 +341,17 @@ function Library:CreateWindow()
             btn.Font = Enum.Font.GothamSemibold
             btn.TextSize = 14
             btn.TextXAlignment = Enum.TextXAlignment.Left
-            btn.ZIndex = 25
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-            
-            local icon = Instance.new("ImageLabel", btn)
-            icon.Size = UDim2.new(0, 20, 0, 20)
-            icon.Position = UDim2.new(1, -35, 0.5, -10)
-            icon.BackgroundTransparency = 1
-            icon.Image = "rbxassetid://10888331510"
-            icon.ImageColor3 = Color3.fromRGB(200, 200, 200)
-            icon.ZIndex = 26
-
-            btn.MouseButton1Click:Connect(function()
-                PlayCustomClick()
-                callback()
-            end)
+            btn.MouseButton1Click:Connect(function() PlayCustomClick(); callback() end)
         end
-    
         return elements
     end
 
     local function Drag(obj)
-        local dragging, dragInput, dragStart, startPos
+        local dragging, dragStart, startPos
         obj.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                startPos = obj.Position
+            if not _G.UILocked and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                dragging = true; dragStart = input.Position; startPos = obj.Position
             end
         end)
         UserInputService.InputChanged:Connect(function(input)
@@ -347,31 +360,17 @@ function Library:CreateWindow()
                 obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
             end
         end)
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
-            end
-        end)
+        UserInputService.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end end)
     end
-    Drag(main)
-    Drag(openBtn)
+    Drag(main); Drag(openBtn)
 
-    openBtn.MouseButton1Click:Connect(function()
-        PlayCustomClick()
-        openBtn.Visible = false
-        main.Visible = true
-        main.Position = UDim2.new(0.5, 0, 0.5, 0)
-        TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = mainSize}):Play()
-    end)
+    openBtn.MouseButton1Click:Connect(function() PlayCustomClick(); openBtn.Visible = false; main.Visible = true; main.Position = UDim2.new(0.5, 0, 0.5, 0); TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = mainSize}):Play() end)
 
     coroutine.wrap(function()
         local h = 0
         while screenGui.Parent do
-            h = h + 1/500
-            local c = Color3.fromHSV(h%1, 0.7, 1)
-            neonStroke.Color = c
-            glowFrame.ImageColor3 = c
-            openStroke.Color = c
+            h = h + 1/500; local c = Color3.fromHSV(h%1, 0.7, 1)
+            neonStroke.Color = c; glowFrame.ImageColor3 = c; openStroke.Color = c
             RunService.RenderStepped:Wait()
         end
     end)()
@@ -380,11 +379,11 @@ function Library:CreateWindow()
 end
 
 local win = Library:CreateWindow()
-local mainTab = win:CreateTab("Main")
-mainTab:AddSection("Automation")
-mainTab:AddToggle("Auto Farm", function(s) end)
+local mainTab = win:CreateTab("Combat")
+mainTab:AddSection("Auto Skills")
+mainTab:AddToggle("Kill Aura", function(s) end)
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
 
-local miscTab = win:CreateTab("Misc")
-miscTab:AddSection("Visuals")
-miscTab:AddToggle("Full Bright", function(s) end)
+local settingTab = win:CreateTab("Settings")
+settingTab:AddSection("Configuration")
+settingTab:AddToggle("Fast Drag", function(s) end)
