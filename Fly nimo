@@ -1,129 +1,101 @@
 getgenv().CharSettings = {
     FlyEnabled = false,
-    FlySpeed = 60 -- Tăng nhẹ tốc độ để mượt hơn
+    FlySpeed = 55
 }
 
-local players = game:GetService("Players")
-local workspace = game:GetService("Workspace")
 local user_input_service = game:GetService("UserInputService")
-local replicated_storage = game:GetService("ReplicatedStorage")
+local workspace = game:GetService("Workspace")
 local Vector3_new = Vector3.new
 local CFrame_new = CFrame.new
 
 local function findModule(name)
-    local rf = game:GetService("ReplicatedFirst")
-    -- BRM5 thường để trong Flux_client
-    for _, flux_name in ipairs({"Flux_client", "Flux/client", "Flux"}) do
-        local flux = rf:FindFirstChild(flux_name)
-        if flux then
-            local found = flux:FindFirstChild(name, true)
-            if found then return found end
-        end
+    for _, v in ipairs(game:GetService("ReplicatedFirst"):GetDescendants()) do
+        if v:IsA("ModuleScript") and v.Name == name then return v end
     end
-    
-    local found = rf:FindFirstChild(name, true)
-    if found then return found end
-
-    local Packages = replicated_storage:FindFirstChild("Packages")
-    local RequireMod = Packages and Packages:FindFirstChild("require")
-    if RequireMod then
-        local success, Loader = pcall(require, RequireMod)
-        if success and Loader and Loader._modules and Loader._modules[name] then
-            return Loader._modules[name]
-        end
+    for _, v in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+        if v:IsA("ModuleScript") and v.Name == name then return v end
     end
-    
-    found = replicated_storage:FindFirstChild(name, true)
-    if found and found:IsA("ModuleScript") then return found end
-
     return nil
 end
 
 task.spawn(function()
     local CharacterController = nil
-    print("Đang tìm CharacterController...")
-    
-    while true do
-        if not CharacterController then
-            local mod = findModule("CharacterController")
-            if mod then
-                local success, result = pcall(require, mod)
-                if success and result and result.Update then
-                    CharacterController = result
-                    print("Đã tìm thấy và Hook thành công!")
+    while not CharacterController do
+        local mod = findModule("CharacterController")
+        if mod then
+            local success, result = pcall(require, mod)
+            if success and result and result.Update then
+                CharacterController = result
+                print("BRM5: Đã tìm đúng Controller của bạn!")
 
-                    if not getgenv().OldCharUpdate then
-                        getgenv().OldCharUpdate = CharacterController.Update
-                    end
-                    
-                    CharacterController.Update = function(self, inputVector, deltaTime)
-                        if not self or not self._localActor then 
-                            return getgenv().OldCharUpdate(self, inputVector, deltaTime) 
-                        end
-
-                        if getgenv().CharSettings.FlyEnabled then
-                            -- Vô hiệu hóa trọng lực và trạng thái rơi của Flux
-                            self.VelocityGravity = 0
-                            self.HeightState = 0 
-                            self.IsGrounded = true
-                            self._isClimbing = false
-                            self._isFalling = false
-                            
-                            local camCF = workspace.CurrentCamera.CFrame
-                            local dir = Vector3_new(0, 0, 0)
-
-                            -- Tính toán hướng bay theo Camera
-                            if inputVector.Magnitude > 0 then
-                                dir = dir + (camCF.LookVector * -inputVector.Y) + (camCF.RightVector * inputVector.X)
-                            end
-
-                            if user_input_service:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3_new(0, 1, 0) end
-                            if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3_new(0, 1, 0) end
-
-                            if dir.Magnitude > 0 then
-                                local flySpeedVal = tonumber(getgenv().CharSettings.FlySpeed) or 50
-                                local flySprint = user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and 2.5 or 1
-                                local nextPos = self._position + (dir.Unit * flySpeedVal * flySprint * deltaTime)
-                                
-                                -- Cập nhật đồng bộ các biến vị trí
-                                self._position = nextPos
-                                self._lastSafePosition = nextPos
-                                
-                                if self._localActor then
-                                    self._localActor.SimulatedPosition = nextPos
-                                end
-                            end
-
-                            -- Cập nhật Model vật lý để tránh bị Server kéo lại (Rubberband)
-                            local char = self._localActor and (self._localActor.Character or self._localActor._model)
-                            if char then
-                                local root = char:FindFirstChild("Root") or char.PrimaryPart
-                                if root then
-                                     -- Triệt tiêu lực vật lý để tránh va chạm ảo
-                                     root.AssemblyLinearVelocity = Vector3_new(0,0,0)
-                                     root.CFrame = CFrame_new(self._position, self._position + camCF.LookVector)
-                                end
-                            end
-                            
-                            -- Vẫn chạy hàm gốc với input trống để duy trì animation và state
-                            return getgenv().OldCharUpdate(self, Vector3_new(0,0,0), deltaTime)
-                        end
-
-                        return getgenv().OldCharUpdate(self, inputVector, deltaTime)
-                    end
-                    break 
+                if not getgenv().OldCharUpdate then
+                    getgenv().OldCharUpdate = CharacterController.Update
                 end
+
+                CharacterController.Update = function(self, inputVector, deltaTime)
+                    -- Kiểm tra xem đây có phải là LocalPlayer không (Bypass NPC)
+                    if not self or not self._localActor then 
+                        return getgenv().OldCharUpdate(self, inputVector, deltaTime) 
+                    end
+
+                    if getgenv().CharSettings.FlyEnabled then
+                        -- Tắt trọng lực nội bộ của Flux
+                        self.VelocityGravity = 0
+                        self.HeightState = 0 
+                        self.IsGrounded = true
+                        
+                        local camCF = workspace.CurrentCamera.CFrame
+                        local moveDir = Vector3_new(0, 0, 0)
+
+                        -- Tính hướng di chuyển
+                        if inputVector.Magnitude > 0 then
+                            moveDir = moveDir + (camCF.LookVector * -inputVector.Y) + (camCF.RightVector * inputVector.X)
+                        end
+                        if user_input_service:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3_new(0, 1, 0) end
+                        if user_input_service:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir - Vector3_new(0, 1, 0) end
+
+                        -- Cập nhật vị trí logic
+                        if moveDir.Magnitude > 0 then
+                            local speed = getgenv().CharSettings.FlySpeed
+                            local sprint = user_input_service:IsKeyDown(Enum.KeyCode.LeftShift) and 2.5 or 1
+                            self._position = self._position + (moveDir.Unit * speed * sprint * deltaTime)
+                        end
+
+                        -- CẬP NHẬT VẬT LÝ (Quan trọng để bay thực sự)
+                        -- _localActor._model là nơi chứa nhân vật thực trong BRM5
+                        local model = self._localActor._model
+                        if model then
+                            -- Sử dụng PrimaryPart để di chuyển cả khối nhân vật
+                            local root = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart")
+                            if root then
+                                root.CFrame = CFrame_new(self._position, self._position + camCF.LookVector)
+                                -- Đóng băng vận tốc để không bị rơi do trọng lực Roblox
+                                root.AssemblyLinearVelocity = Vector3_new(0, 0, 0)
+                            end
+                        end
+
+                        -- Đồng bộ hóa lại cho hệ thống Anti-cheat của game
+                        self._lastSafePosition = self._position
+                        self._localActor.SimulatedPosition = self._position
+                        
+                        -- Chạy hàm gốc với input trống để giữ animation (cầm súng, thở...)
+                        return getgenv().OldCharUpdate(self, Vector3_new(0,0,0), deltaTime)
+                    end
+
+                    return getgenv().OldCharUpdate(self, inputVector, deltaTime)
+                end
+                break
             end
         end
         task.wait(1)
     end
 end)
 
--- Phím bật/tắt (Mặc định là T)
+-- Phím tắt (T)
 user_input_service.InputBegan:Connect(function(input, typing)
     if typing then return end
     if input.KeyCode == Enum.KeyCode.T then
         getgenv().CharSettings.FlyEnabled = not getgenv().CharSettings.FlyEnabled
-        print("Fly Status: ", getgenv().CharSettings.FlyEnabled)
+        print("Fly đang: " .. (getgenv().CharSettings.FlyEnabled and "BẬT" or "TẮT"))
     end
 end)
