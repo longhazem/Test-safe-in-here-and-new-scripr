@@ -1,98 +1,95 @@
---[[
-    Script: No Fall Damage with Draggable UI
-    Description: Chặn sát thương khi ngã với giao diện có thể kéo thả
-]]
+local Players = game:GetService('Players')
+local LocalPlayer = Players.LocalPlayer
 
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local TitleLabel = Instance.new("TextLabel")
-local ToggleButton = Instance.new("TextButton")
-local UIStroke = Instance.new("UIStroke")
-local UICorner = Instance.new("UICorner")
+local Workspace = game:GetService('Workspace')
+local Camera = Workspace.CurrentCamera
+local CenterPosition = Camera.ViewportSize / 2
 
--- Cấu hình mặc định
-_G.Config = {
-    noFallDamage = false
+-- Chỉ giữ lại 1 vòng Fov (không có ruột)
+local Drawings = {FovOutline = nil}
+
+local Functions = {
+    -- Đã gỡ bỏ GetClients vì chúng ta nhắm vào NPC trong Workspace thay vì dữ liệu người chơi
+    GetMuzzleCFrame = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
+    GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
 }
 
--- Thiết lập ScreenGui
-ScreenGui.Name = "NoFallDamageMenu"
-ScreenGui.Parent = game:GetService("CoreGui") -- Đưa vào CoreGui để không bị mất khi hồi sinh
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+function AddDrawing(Type, Properties)
+    local DrawingObject = Drawing.new(Type)
 
--- Khung chính (Main Frame)
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-MainFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
-MainFrame.Size = UDim2.new(0, 200, 0, 100)
-MainFrame.Active = true
-MainFrame.Draggable = true -- Cho phép kéo thả (Cũ nhưng hiệu quả)
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
-MainCorner.Parent = MainFrame
-
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Thickness = 2
-MainStroke.Color = Color3.fromRGB(60, 60, 60)
-MainStroke.Parent = MainFrame
-
--- Tiêu đề
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Parent = MainFrame
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Size = UDim2.new(1, 0, 0, 40)
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "NO FALL DAMAGE"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 14
-
--- Nút Bật/Tắt (Toggle Button)
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Parent = MainFrame
-ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ mặc định (Tắt)
-ToggleButton.Position = UDim2.new(0.1, 0, 0.5, 0)
-ToggleButton.Size = UDim2.new(0.8, 0, 0, 35)
-ToggleButton.Font = Enum.Font.GothamSemibold
-ToggleButton.Text = "OFF"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 14
-
-local ButtonCorner = Instance.new("UICorner")
-ButtonCorner.CornerRadius = UDim.new(0, 8)
-ButtonCorner.Parent = ToggleButton
-
--- Logic xử lý Bật/Tắt
-ToggleButton.MouseButton1Click:Connect(function()
-    _G.Config.noFallDamage = not _G.Config.noFallDamage
-    
-    if _G.Config.noFallDamage then
-        ToggleButton.Text = "ON"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Xanh (Bật)
-    else
-        ToggleButton.Text = "OFF"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Đỏ (Tắt)
+    for Property, Value in pairs(Properties) do
+        DrawingObject[Property] = Value
     end
-end)
 
--- LOGIC HOOK FUNCTION (Chạy 1 lần duy nhất)
-local success, err = pcall(function()
-    local __oldTakeDamage
-    __oldTakeDamage = hookfunction(Instance.new("Humanoid").TakeDamage, function(self, damage, ...)
-        -- Kiểm tra nếu config bật THÌ chặn sát thương
-        if _G.Config.noFallDamage and (damage and damage > 0) then
-            -- Trong nhiều game, sát thương ngã được gửi qua TakeDamage
-            -- Chúng ta có thể kiểm tra thêm trạng thái nhân vật nếu muốn kỹ hơn
-            return
-        end
-        return __oldTakeDamage(self, damage, ...)
-    end)
-end)
-
-if not success then
-    warn("Lỗi Hook: Script này yêu cầu một Executor hỗ trợ hookfunction (như Synapse, Fluxus, Delta...)")
+    return DrawingObject
 end
 
--- Thông báo cho người dùng
-print("No Fall Damage UI đã sẵn sàng!")
+-- Hàm tìm NPC tên "Male" gần tâm màn hình nhất
+function GetClosestNPC()
+    local ClosestNPC, ClosestDistance = nil, math.huge
+
+    -- Quét toàn bộ Workspace để tìm NPC (nếu game có thư mục chứa NPC riêng, bạn có thể thay Workspace thành thư mục đó để giảm lag)
+    for _, Obj in pairs(Workspace:GetDescendants()) do
+        if Obj:IsA("Model") and Obj.Name == "Male" then
+            local Head = Obj:FindFirstChild("Head")
+            local Humanoid = Obj:FindFirstChild("Humanoid")
+
+            -- Kiểm tra NPC có tồn tại và còn sống không
+            if Head and Humanoid and Humanoid.Health > 0 then
+                local Position, OnScreen = Camera:WorldToViewportPoint(Head.Position)
+                if not OnScreen then continue end
+
+                local Distance = (Vector2.new(Position.X, Position.Y) - CenterPosition).Magnitude
+                if Distance > 180 or Distance > ClosestDistance then continue end
+
+                ClosestNPC = Obj
+                ClosestDistance = Distance
+            end
+        end
+    end
+    
+    return ClosestNPC, ClosestDistance
+end
+
+-- FOV Circle: Filled = false để không có ruột, chỉ lấy viền
+Drawings.FovOutline = AddDrawing('Circle', {
+    Visible = true, 
+    Filled = false, 
+    Position = CenterPosition, 
+    Radius = 180, 
+    Thickness = 1.5, 
+    Color = Color3.new(1, 1, 1)
+})
+
+local OldMuzzle; OldMuzzle = hookfunction(Functions.GetMuzzleCFrame, function(Self, Cast)
+    local Origin, Barrel, Camera = OldMuzzle(Self, Cast)
+
+    if not Cast and Origin then
+        -- Gọi hàm tìm NPC
+        local NPC = GetClosestNPC()
+        if not NPC then return Origin, Barrel, Camera end
+        
+        -- Chỉnh hướng đạn bắn vào đầu NPC
+        local NewOrigin = CFrame.new(Origin.Position, NPC.Head.Position)
+        return NewOrigin, Barrel, Camera
+    end
+
+    return Origin, Barrel, Camera
+end)
+
+local OldRecoil; OldRecoil = hookfunction(Functions.GetRecoil, function(...)
+    local Args = {...}
+    
+    -- Xoá độ giật
+    Args[1]['Barrel_Spread'] = 0; Args[1]['RecoilForce_Tap'] = 0
+
+    return OldRecoil(unpack(Args))
+end)
+
+-- Cập nhật lại vị trí FOV khi đổi kích thước màn hình
+Camera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
+    CenterPosition = Camera.ViewportSize / 2
+    if Drawings.FovOutline then
+        Drawings.FovOutline.Position = CenterPosition
+    end
+end)
