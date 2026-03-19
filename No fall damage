@@ -1,15 +1,13 @@
 local Players = game:GetService('Players')
 local LocalPlayer = Players.LocalPlayer
-
 local Workspace = game:GetService('Workspace')
+
 local Camera = Workspace.CurrentCamera
 local CenterPosition = Camera.ViewportSize / 2
 
--- Chỉ giữ lại 1 vòng Fov (không có ruột)
 local Drawings = {FovOutline = nil}
 
 local Functions = {
-    -- Đã gỡ bỏ GetClients vì chúng ta nhắm vào NPC trong Workspace thay vì dữ liệu người chơi
     GetMuzzleCFrame = filtergc('function', {Name = 'GetMuzzleCFrame'}, true),
     GetRecoil = filtergc('function', {Name = 'getRecoil'}, true)
 }
@@ -24,23 +22,43 @@ function AddDrawing(Type, Properties)
     return DrawingObject
 end
 
--- Hàm tìm NPC tên "Male" gần tâm màn hình nhất
+-- Hàm kiểm tra vật cản (Wall Check) sử dụng Raycast
+local function IsVisible(TargetPart)
+    if not LocalPlayer.Character then return false end
+    
+    local Origin = Camera.CFrame.Position
+    local Direction = TargetPart.Position - Origin
+    
+    local Params = RaycastParams.new()
+    -- Bỏ qua nhân vật của người chơi và toàn bộ model của NPC mục tiêu để không bị lỗi tự che
+    Params.FilterDescendantsInstances = {LocalPlayer.Character, TargetPart.Parent}
+    Params.FilterType = Enum.RaycastFilterType.Exclude
+    Params.IgnoreWater = true
+    
+    -- Bắn tia từ camera tới mục tiêu
+    local Result = Workspace:Raycast(Origin, Direction, Params)
+    
+    -- Nếu Result trả về nil (không trúng vật cản nào), tức là tầm nhìn quang đãng (không có tường)
+    return Result == nil
+end
+
 function GetClosestNPC()
     local ClosestNPC, ClosestDistance = nil, math.huge
 
-    -- Quét toàn bộ Workspace để tìm NPC (nếu game có thư mục chứa NPC riêng, bạn có thể thay Workspace thành thư mục đó để giảm lag)
     for _, Obj in pairs(Workspace:GetDescendants()) do
         if Obj:IsA("Model") and Obj.Name == "Male" then
             local Head = Obj:FindFirstChild("Head")
             local Humanoid = Obj:FindFirstChild("Humanoid")
 
-            -- Kiểm tra NPC có tồn tại và còn sống không
             if Head and Humanoid and Humanoid.Health > 0 then
                 local Position, OnScreen = Camera:WorldToViewportPoint(Head.Position)
                 if not OnScreen then continue end
 
                 local Distance = (Vector2.new(Position.X, Position.Y) - CenterPosition).Magnitude
                 if Distance > 180 or Distance > ClosestDistance then continue end
+                
+                -- Bổ sung Wall Check: Nếu NPC bị khuất sau tường, bỏ qua NPC này
+                if not IsVisible(Head) then continue end
 
                 ClosestNPC = Obj
                 ClosestDistance = Distance
@@ -51,7 +69,7 @@ function GetClosestNPC()
     return ClosestNPC, ClosestDistance
 end
 
--- FOV Circle: Filled = false để không có ruột, chỉ lấy viền
+-- FOV Circle: Filled = false (không có ruột)
 Drawings.FovOutline = AddDrawing('Circle', {
     Visible = true, 
     Filled = false, 
@@ -65,11 +83,9 @@ local OldMuzzle; OldMuzzle = hookfunction(Functions.GetMuzzleCFrame, function(Se
     local Origin, Barrel, Camera = OldMuzzle(Self, Cast)
 
     if not Cast and Origin then
-        -- Gọi hàm tìm NPC
         local NPC = GetClosestNPC()
         if not NPC then return Origin, Barrel, Camera end
         
-        -- Chỉnh hướng đạn bắn vào đầu NPC
         local NewOrigin = CFrame.new(Origin.Position, NPC.Head.Position)
         return NewOrigin, Barrel, Camera
     end
@@ -80,13 +96,11 @@ end)
 local OldRecoil; OldRecoil = hookfunction(Functions.GetRecoil, function(...)
     local Args = {...}
     
-    -- Xoá độ giật
     Args[1]['Barrel_Spread'] = 0; Args[1]['RecoilForce_Tap'] = 0
 
     return OldRecoil(unpack(Args))
 end)
 
--- Cập nhật lại vị trí FOV khi đổi kích thước màn hình
 Camera:GetPropertyChangedSignal('ViewportSize'):Connect(function()
     CenterPosition = Camera.ViewportSize / 2
     if Drawings.FovOutline then
