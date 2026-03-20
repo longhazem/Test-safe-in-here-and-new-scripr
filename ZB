@@ -1,0 +1,343 @@
+-- filename: 
+-- version: lua51
+-- line: [0, 0] id: 1
+local r0_1 = game:GetService("Players")
+local r1_1 = game:GetService("ReplicatedStorage")
+local r2_1 = game:GetService("RunService")
+local r3_1 = game:GetService("VirtualUser")
+local r4_1 = game:GetService("HttpService")
+local r6_1 = r1_1:WaitForChild("Events")
+local r7_1 = r6_1:WaitForChild("PlayerTeleportServiceRemote")
+local r8_1 = r6_1:WaitForChild("CollectibleRemote")
+local r9_1 = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))
+r9_1 = r9_1()
+local r14_1 = r9_1:CreateWindow(0)
+local r15_1 = Color3.fromHex("#FF1744")
+r14_1 = ColorSequence.new()
+local r10_1 = r9_1:CreateWindow(r9_1, {
+  Title = "Tensei Hub | Zaibatsu",
+  Author = "Premium Auto Farm",
+  Folder = "TenseiHub",
+  OpenButton = r13_1,
+})
+local r11_1 = r10_1:Tab({Title = "Auto Farm", Icon = "coins"})
+r14_1 = tick()
+local r20_1 = r11_1:Paragraph({Title = "Status", Desc = "Ready"})
+local r21_1 = r11_1:Paragraph({Title = "Statistics", Desc = "Loading..."})
+local r25_1 = function(r0_24)
+  -- line: [0, 0] id: 24
+  upval_0.EpisodeFarm = r0_24
+  return
+end
+r11_1:Toggle({
+  Title = "Episode Auto-Farm",
+  Desc = "Farm episodes for J-Coins",
+  Default = false,
+  Callback = r25_1,
+})
+local r25_1 = function(r0_5)
+  -- line: [0, 0] id: 5
+  upval_0.GiftCardFarm = r0_5
+  return
+end
+r11_1:Toggle({
+  Title = "Gift Card Collection",
+  Desc = "Collect gift cards (300-1000 J-coins)",
+  Default = false,
+  Callback = r25_1,
+})
+local r25_1 = function(r0_13)
+  -- line: [0, 0] id: 13
+  upval_0.CollectionDelay = r0_13
+  return
+end
+r11_1:Slider({
+  Title = "Collection Delay",
+  Step = 0.1,
+  Value = r25_1,
+  Callback = r25_1,
+})
+r25_1 = r11_1:Button()
+local r25_1 = function()
+  -- line: [0, 0] id: 14
+  task.spawn(CollectGiftCards)
+  return
+end
+r11_1:Button(r11_1, {Title = "Force Collect Cards", Color = r25_1, Callback = r25_1})
+local r22_1 = function(r0_20)
+  -- line: [0, 0] id: 20
+  upval_0:SetDesc(r0_20)
+  return
+end
+local r23_1 = function()
+  -- line: [0, 0] id: 6
+  local r1_6 = tick()
+  local r0_6 = math.floor(r1_6 - upval_0.SessionStart / 60)
+  upval_1:SetDesc(upval_1)
+  return
+end
+local r24_1 = function()
+  -- line: [0, 0] id: 25
+  if not upval_0.Character then
+    local r1_25 = upval_0.Character:FindFirstChild("HumanoidRootPart")
+  end
+  return r1_25
+end
+local r25_1 = function(r0_17)
+  -- line: [0, 0] id: 17
+  local r1_17 = r0_17:match("Episode_(.-)_")
+  if r1_17 then
+  end
+  local r2_17 = workspace:FindFirstChild("MapMarkers")
+  if not r2_17 then
+    local r3_17 = r2_17:FindFirstChild("MapMarkers")
+    if not r3_17 then
+      local r3_17, r4_17, r5_17 = ipairs(r2_17.MapMarkers:GetChildren())
+      local r8_17 = r7_17.Name:lower()
+      r8_17 = r8_17:find(r8_17)
+      if not r8_17 then
+        return r7_17.Name
+      end
+      for r6_17, r7_17 in r3_17 do
+      end
+    end
+    local r3_17, r4_17, r5_17 = pairs(upval_0)
+    r8_17 = r0_17:find(r6_17)
+    if not r8_17 then
+      return r7_17
+    end
+    for r6_17, r7_17 in r3_17 do
+      return r0_17
+end
+local r26_1 = function()
+  -- line: [0, 0] id: 8
+  local r0_8 = workspace:FindFirstChild("Collectibles")
+  if r0_8 then
+    upval_0("No collectibles found")
+    return
+  end
+  upval_0("Scanning for gift cards...")
+  local r2_8, r3_8, r4_8 = ipairs(r0_8:GetChildren())
+  if not upval_1[r6_8.Name] then
+    if upval_2[r6_8.Name] then
+      table.insert(r1_8, r6_8.Name)
+    end
+  end
+  for r5_8, r6_8 in r2_8 do
+    if #r1_8 == 0 then
+      upval_0("No new cards found")
+      return
+    end
+    upval_0(string.format("Found %d cards", #r1_8))
+    local r3_8, r4_8, r5_8 = ipairs(r1_8)
+    upval_3 = upval_3 + 1
+    local r10_8 = function()
+      -- line: [0, 0] id: 9
+      upval_0:FireServer(upval_0)
+      return
+    end
+    local r9_8 = pcall({CollectibleId = table.insert})
+    if not r9_8 then
+      upval_2[table.insert] = true
+      upval_5.Cards = upval_5.Cards + 1
+      upval_6()
+      upval_0(string.format("Collected %s", table.insert))
+    end
+    local r12_8 = math.random()
+    wait(upval_7.CollectionDelay + r12_8 * 0.5)
+    for r6_8, r7_8 in r3_8 do
+      upval_0(string.format("Collected %d cards!", 0 + 1))
+      SaveData()
+      return
+end
+CollectGiftCards = r26_1
+local r26_1 = function(r0_10)
+  -- line: [0, 0] id: 10
+  if not r0_10 then
+    if r0_10.Parent then
+    end
+    return
+  end
+  upval_0 = true
+  upval_1 = r0_10
+  local r1_10 = r0_10.Name:match("Episode_(.-)_")
+  if r1_10 then
+  end
+  upval_2("Starting: " .. "Unknown")
+  local r2_10 = upval_3(r0_10.Name)
+  if not r2_10 then
+    local r5_10 = function()
+      -- line: [0, 0] id: 11
+      upval_0:FireServer(upval_0)
+      return
+    end
+    pcall({LocationId = r2_10})
+    wait(3)
+  end
+  local r3_10 = upval_5()
+  if r3_10 then
+    upval_0 = false
+    return
+  end
+  local r4_10 = r0_10:FindFirstChild("EpisodePayZones")
+  if not r4_10 then
+    r5_10 = r4_10:FindFirstChildOfClass("Part")
+    if r5_10 then
+      r5_10 = r4_10:FindFirstChildOfClass("BasePart")
+    end
+    if not r5_10 then
+      local r7_10 = Vector3.new(0, 3, 0)
+      upval_2("Farming: " .. "Unknown")
+      local r6_10 = tick()
+      if not r0_10.Parent then
+        if not upval_6.EpisodeFarm then
+          r7_10 = tick()
+          if r7_10 - r6_10 < 300 then
+            if not r3_10 then
+              if not r5_10 then
+                if 20 < r3_10.Position - r5_10.Position.Magnitude then
+                  local r9_10 = math.random(-2, 2)
+                  local r8_10 = Vector3.new()
+                end
+              end
+            end
+            wait(2)
+          end
+        end
+      end
+      upval_7.Episodes = upval_7.Episodes + 1
+      upval_8()
+    end
+  end
+  upval_1 = nil
+  upval_0 = false
+  upval_2("Episode completed!")
+  return
+end
+local r28_1 = function()
+  -- line: [0, 0] id: 12
+  upval_0:CaptureController()
+  upval_0:ClickButton2(upval_0)
+  local r1_12 = math.random(0, 60)
+  wait(120 + r1_12)
+  return
+end
+task.spawn(r28_1)
+local r29_1 = function()
+  -- line: [0, 0] id: 22
+  wait(3)
+  if not upval_0 then
+    if not upval_1.EpisodeFarm then
+      local r1_22 = function()
+        -- line: [0, 0] id: 23
+        upval_0(upval_1)
+        return
+      end
+      task.spawn(r1_22)
+    end
+  end
+  return
+end
+r0_1.LocalPlayer.CharacterAdded:Connect(r29_1)
+local r28_1 = function()
+  -- line: [0, 0] id: 4
+  if not upval_0.EpisodeFarm then
+    if upval_1 then
+      local r0_4, r1_4, r2_4 = ipairs(workspace:GetChildren())
+      local r5_4 = r4_4.Name:match("^Episode_")
+      if not r5_4 then
+        r5_4 = r4_4:FindFirstChild("EpisodePayZones")
+        if not r5_4 then
+          upval_2(r4_4)
+        end
+      end
+      for r3_4, r4_4 in r0_4 do
+      end
+    end
+    wait(5)
+    return
+end
+task.spawn(r28_1)
+local r28_1 = function()
+  -- line: [0, 0] id: 7
+  if not upval_0.GiftCardFarm then
+    if upval_1 then
+      CollectGiftCards()
+    end
+  end
+  local r1_7 = math.random(0, 30)
+  wait(30 + r1_7)
+  return
+end
+task.spawn(r28_1)
+local r28_1 = function()
+  -- line: [0, 0] id: 15
+  local r0_15 = upval_0:WaitForChild("leaderstats", 10)
+  if not r0_15 then
+    local r1_15 = r0_15:FindFirstChild("JCoins")
+    if r1_15 then
+      r1_15 = r0_15:FindFirstChild("J-Coins")
+      if r1_15 then
+        r1_15 = r0_15:FindFirstChild("J Coins")
+      end
+    end
+    if not r1_15 then
+      local r4_15 = function(r0_16)
+        -- line: [0, 0] id: 16
+        upval_0.JCoins = r0_16
+        upval_1()
+        return
+      end
+      r1_15.Changed:Connect(r4_15)
+      upval_1.JCoins = r1_15.Value
+    end
+  end
+  upval_2()
+  return
+end
+task.spawn(r28_1)
+local r27_1 = function()
+  -- line: [0, 0] id: 18
+  local r1_18, r2_18, r3_18 = pairs(upval_0)
+  table.insert(r0_18, r4_18)
+  for r4_18 in r1_18 do
+    local r2_18 = function()
+      -- line: [0, 0] id: 19
+      writefile("TenseiHub_Zaibatsu.json")
+      return
+    end
+    pcall(r2_18)
+    return
+end
+SaveData = r27_1
+local r27_1 = function()
+  -- line: [0, 0] id: 2
+  local r1_2 = function()
+    -- line: [0, 0] id: 3
+    return upval_0:JSONDecode()
+    return 
+  end
+  local r0_2, r1_2 = pcall(r1_2)
+  if not r0_2 then
+    if not r1_2 then
+      local r2_2, r3_2, r4_2 = ipairs(r1_2)
+      upval_1[r6_2] = true
+      for r5_2, r6_2 in r2_2 do
+        upval_2.Cards = #r1_2
+      end
+    end
+    return
+end
+LoadData = r27_1
+local r28_1 = function()
+  -- line: [0, 0] id: 21
+  wait(60)
+  SaveData()
+  return
+end
+task.spawn(r28_1)
+LoadData()
+r23_1()
+r22_1("Tensei Hub Ready!")
+r9_1:Notify({Title = "Tensei Hub", Content = "Zaibatsu Auto Farm loaded!", Icon = "check"})
+return
