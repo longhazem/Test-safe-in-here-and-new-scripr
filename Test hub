@@ -1,73 +1,80 @@
+-- [[ TOKAI HUB - FULL VERSION FOR PC & MOBILE ]]
+-- Game: Blackhawk Rescue Mission 5
+
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local SoundService = game:GetService("SoundService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RS = game:GetService("ReplicatedStorage")
-local lighting = game:GetService("Lighting")
+local Lighting = game:GetService("Lighting")
 
--- [ SETTINGS & VARIABLES ]
-local localPlayer = Players.LocalPlayer
-local camera = Workspace.CurrentCamera
-local hitboxSize = 10 
-local activeNPCs = {}      
-local trackedParts = {}    
-local originalSizes = {} 
-local ModifiedParts = {} -- Dành cho Hitbox Spoofing
+-- [ KHỞI TẠO BIẾN ]
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local ActiveNPCs = {}
+local OriginalSizes = {}
+local ModifiedParts = {}
+local TrackedBoxes = {}
 
-local wallEnabled = false       
-local outlineEnabled = false    
-local silentEnabled = false     
-local showHitbox = false        
-local fullBrightEnabled = false 
-local alwaysDayEnabled = false
-local fastScanEnabled = false
-local isUnloaded = false     
-local patchOptions = { recoil = false, firemodes = false }
+local Settings = {
+    HitboxSize = 10,
+    SilentEnabled = false,
+    ShowHitbox = false,
+    WallEnabled = false,       -- ESP Sphere
+    OutlineEnabled = false,    -- ESP Outline
+    FullBright = false,
+    NoFog = false,
+    AlwaysDay = false,
+    FastScan = true,
+    NoRecoil = false,
+    UnlockFiremodes = false,
+    IsUnloaded = false
+}
 
-local maleColor = Color3.fromRGB(0, 255, 0)
-local zombieColor = Color3.fromRGB(255, 0, 0)
-local hitboxVisualColor = Color3.fromRGB(255, 0, 0) 
-local noFogConnection = nil
-
-------------------------------------------------------------------
--- [[ METATABLE HOOKING - HITBOX SPOOFER ]]
-------------------------------------------------------------------
-local mt = getrawmetatable(game)
-local old_index = mt.__index
-setreadonly(mt, false)
-
-mt.__index = newcclosure(function(t, k)
-    if not isUnloaded and k == "Size" and ModifiedParts[t] then
-        return originalSizes[t] or Vector3.new(1, 1, 1)
-    end
-    return old_index(t, k)
-end)
-setreadonly(mt, true)
+local MaleColor = Color3.fromRGB(0, 255, 0)
+local ZombieColor = Color3.fromRGB(255, 0, 0)
+local FogConnection = nil
 
 ------------------------------------------------------------------
--- [[ WEAPON MODS ]]
+-- [[ METATABLE HOOK - HITBOX SPOOFER ]]
 ------------------------------------------------------------------
-local function patchWeapons()
-    local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
-    if not weaponsFolder then return end
+-- Giúp phóng to hitbox mà game vẫn tưởng là size cũ (Tránh Anti-cheat)
+local success, mt = pcall(getrawmetatable, game)
+if success and mt then
+    local old_index = mt.__index
+    local set_readonly = setreadonly or make_writeable or function(t, b) end
+    set_readonly(mt, false)
+    mt.__index = newcclosure(function(t, k)
+        if not Settings.IsUnloaded and k == "Size" and ModifiedParts[t] then
+            return OriginalSizes[t] or Vector3.new(1, 1, 1)
+        end
+        return old_index(t, k)
+    end)
+    set_readonly(mt, true)
+end
 
-    for _, platform in pairs(weaponsFolder:GetChildren()) do
-        if platform.Name:match("^Platform_") then
+------------------------------------------------------------------
+-- [[ CHỨC NĂNG VŨ KHÍ ]]
+------------------------------------------------------------------
+local function PatchWeapons()
+    pcall(function()
+        local WeaponFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
+        if not WeaponFolder then return end
+
+        for _, platform in pairs(WeaponFolder:GetChildren()) do
             for _, weapon in pairs(platform:GetChildren()) do
                 for _, child in pairs(weapon:GetChildren()) do
-                    if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
+                    if child:IsA("ModuleScript") and child.Name:find("Receiver") then
                         task.spawn(function()
-                            local success, receiver = pcall(require, child)
-                            if success and receiver and receiver.Config and receiver.Config.Tune then
+                            local successReq, receiver = pcall(require, child)
+                            if successReq and receiver and receiver.Config and receiver.Config.Tune then
                                 local tune = receiver.Config.Tune
-                                if patchOptions.recoil then
-                                    tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.RecoilForce_Tap = 0
-                                    tune.RecoilForce_Impulse = 0 tune.Recoil_Range = Vector2.zero
-                                    tune.Recoil_Camera = 0
+                                if Settings.NoRecoil then
+                                    tune.Recoil_X = 0 tune.Recoil_Z = 0 tune.Recoil_Camera = 0
+                                    tune.RecoilForce_Tap = 0 tune.RecoilForce_Impulse = 0
                                 end
-                                if patchOptions.firemodes then
+                                if Settings.UnlockFiremodes then
                                     tune.Firemodes = {3, 2, 1, 0}
                                 end
                             end
@@ -76,207 +83,202 @@ local function patchWeapons()
                 end
             end
         end
-    end
+    end)
 end
 
 ------------------------------------------------------------------
--- [[ NPC & ESP LOGIC ]]
+-- [[ LOGIC NPC & ESP ]]
 ------------------------------------------------------------------
-local function isValidNPC(model)
+local function IsValidNPC(model)
     if not model or not model.Parent then return false end
     local hum = model:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health <= 0 then return false end
-
+    
     local name = model.Name:lower()
-    local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = (model.Name == "Male")
-    if isMale then
+    if name == "male" or name:find("zombie") then
+        -- Kiểm tra thêm tag AI của BRM5
         for _, c in ipairs(model:GetChildren()) do
             if c.Name:sub(1, 3) == "AI_" then return true end
         end
+        if name:find("zombie") then return true end
     end
-    return isZombie
+    return false
 end
 
-local function applyOutline(model)
-    local highlight = model:FindFirstChild("ESP_Outline")
-    if outlineEnabled and isValidNPC(model) then
+local function ApplyESP(model)
+    if not model or not model.Parent then return end
+    
+    -- 1. Outline ESP
+    local highlight = model:FindFirstChild("Tokai_Outline")
+    if Settings.OutlineEnabled then
         if not highlight then
             highlight = Instance.new("Highlight")
-            highlight.Name = "ESP_Outline"
+            highlight.Name = "Tokai_Outline"
             highlight.Parent = model
         end
         highlight.FillTransparency = 1
-        highlight.OutlineColor = string.find(model.Name:lower(), "zombie") and zombieColor or maleColor
+        highlight.OutlineColor = model.Name:lower():find("zombie") and ZombieColor or MaleColor
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    else
-        if highlight then highlight:Destroy() end
+    elseif highlight then
+        highlight:Destroy()
     end
-end
 
-local function createBoxForPart(part)
-    if not part or part:FindFirstChild("Wall_Box") then return end
-    local sphere = Instance.new("SphereHandleAdornment")
-    sphere.Name = "Wall_Box"
-    sphere.Radius = 1.2
-    sphere.Adornee = part
-    sphere.AlwaysOnTop = true 
-    sphere.ZIndex = 10
-    sphere.Transparency = 0.1
-    local model = part.Parent
-    if model then
-        sphere.Color3 = string.find(model.Name:lower(), "zombie") and zombieColor or maleColor
-    end
-    sphere.Parent = part
-    trackedParts[part] = true
-end
-
-local function addNPC(model)
-    if activeNPCs[model] or not isValidNPC(model) then return end
+    -- 2. Sphere ESP (Wall Box)
     local head = model:FindFirstChild("Head")
-    local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
-    if root then
-        activeNPCs[model] = { head = head or root, root = root, model = model }
-        if wallEnabled then createBoxForPart(head or root) end
-        if outlineEnabled then applyOutline(model) end
-    end
-end
-
-------------------------------------------------------------------
--- [[ ADVANCED HITBOX LOGIC (NEW) ]]
-------------------------------------------------------------------
-local function UpdateHitboxes()
-    if not silentEnabled then
-        for part, _ in pairs(ModifiedParts) do
-            if part and part.Parent then
-                part.Size = originalSizes[part] or part.Size
-                part.Transparency = 0
-                part.CanCollide = true
-            end
-            ModifiedParts[part] = nil
-        end
-        return
-    end
-
-    local expansion = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
-    for model, data in pairs(activeNPCs) do
-        local head = data.head
-        if head and head:IsA("BasePart") then
-            if not ModifiedParts[head] then
-                ModifiedParts[head] = true
-                originalSizes[head] = head.Size
-                head.CanCollide = false
-            end
-            head.Size = expansion
-            head.Transparency = showHitbox and 0.7 or 1
-            if showHitbox then head.Color = hitboxVisualColor end
+    if head and Settings.WallEnabled then
+        if not head:FindFirstChild("Tokai_Sphere") then
+            local sphere = Instance.new("SphereHandleAdornment")
+            sphere.Name = "Tokai_Sphere"
+            sphere.Radius = 1.3
+            sphere.Adornee = head
+            sphere.AlwaysOnTop = true
+            sphere.ZIndex = 10
+            sphere.Transparency = 0.4
+            sphere.Color3 = model.Name:lower():find("zombie") and ZombieColor or MaleColor
+            sphere.Parent = head
+            TrackedBoxes[head] = sphere
         end
     end
 end
 
 ------------------------------------------------------------------
--- [[ RAYFIELD UI ]]
+-- [[ GIAO DIỆN RAYFIELD ]]
 ------------------------------------------------------------------
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({ Name = "⚔️🐧tokai hub ULTIMATE (BRM5)", Theme = "Default" })
-
-local CombatTab = Window:CreateTab("Combat ⚔️")
-CombatTab:CreateToggle({ Name = "Hitbox Expander (Spoof)", CurrentValue = false, Callback = function(v) silentEnabled = v end })
-CombatTab:CreateToggle({ Name = "Show Hitbox Visual", CurrentValue = false, Callback = function(v) showHitbox = v end })
-CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {1, 20}, Increment = 1, CurrentValue = 10, Callback = function(v) hitboxSize = v end })
-
-local VisibleTab = Window:CreateTab("Visible ")
-VisibleTab:CreateToggle({
-   Name = "ESP NPC (Sphere)",
-   CurrentValue = false,
-   Callback = function(v) 
-       wallEnabled = v
-       if v then for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
-       else 
-           for part, _ in pairs(trackedParts) do if part:FindFirstChild("Wall_Box") then part.Wall_Box:Destroy() end end
-           trackedParts = {}
-       end 
-   end,
+local Window = Rayfield:CreateWindow({
+    Name = "⚔️ Tokai Hub Ultimate | BRM5",
+    LoadingTitle = "Đang tải hệ thống...",
+    LoadingSubtitle = "Hỗ trợ PC & Mobile",
+    Theme = "Default"
 })
-VisibleTab:CreateToggle({ Name = "ESP NPC (Outline Only)", CurrentValue = false, Callback = function(v) 
-    outlineEnabled = v 
-    for model, _ in pairs(activeNPCs) do applyOutline(model) end
-end })
-VisibleTab:CreateToggle({ Name = "Fast Scan (0.001s)", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
-VisibleTab:CreateToggle({
-   Name = "No Fog (Force 0)",
-   CurrentValue = false,
-   Callback = function(v) 
-        local atm = lighting:FindFirstChildOfClass("Atmosphere")
-        if v and atm then
-            noFogConnection = atm:GetPropertyChangedSignal("Density"):Connect(function() atm.Density = 0 end)
-            atm.Density = 0
-            lighting.FogEnd = 100000
-        elseif noFogConnection then
-            noFogConnection:Disconnect()
-            if atm then atm.Density = 0.3 end
+
+-- TAB CHIẾN ĐẤU
+local CombatTab = Window:CreateTab("Chiến Đấu ⚔️")
+CombatTab:CreateToggle({
+    Name = "Hitbox Expander (Mở rộng đầu)",
+    CurrentValue = false,
+    Callback = function(v) Settings.SilentEnabled = v end
+})
+CombatTab:CreateSlider({
+    Name = "Kích thước Hitbox",
+    Range = {1, 20},
+    Increment = 1,
+    CurrentValue = 10,
+    Callback = function(v) Settings.HitboxSize = v end
+})
+CombatTab:CreateToggle({
+    Name = "Hiện khung Hitbox (Visual)",
+    CurrentValue = false,
+    Callback = function(v) Settings.ShowHitbox = v end
+})
+
+-- TAB HIỂN THỊ
+local VisualTab = Window:CreateTab("Hiển Thị 👁️")
+VisualTab:CreateToggle({
+    Name = "ESP Outline (Viền)",
+    CurrentValue = false,
+    Callback = function(v) 
+        Settings.OutlineEnabled = v 
+        for model, _ in pairs(ActiveNPCs) do ApplyESP(model) end
+    end
+})
+VisualTab:CreateToggle({
+    Name = "ESP Sphere (Khối cầu)",
+    CurrentValue = false,
+    Callback = function(v) 
+        Settings.WallEnabled = v 
+        if not v then
+            for head, sphere in pairs(TrackedBoxes) do if sphere then sphere:Destroy() end end
+            TrackedBoxes = {}
         end
-   end,
+    end
 })
-VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = function(v) alwaysDayEnabled = v end })
-VisibleTab:CreateToggle({ Name = "FullBright", CurrentValue = false, Callback = function(v) fullBrightEnabled = v end })
+VisualTab:CreateToggle({
+    Name = "Xóa Sương Mù (No Fog)",
+    CurrentValue = false,
+    Callback = function(v)
+        Settings.NoFog = v
+        local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+        if v and atm then
+            if FogConnection then FogConnection:Disconnect() end
+            FogConnection = atm:GetPropertyChangedSignal("Density"):Connect(function() 
+                if Settings.NoFog then atm.Density = 0 end 
+            end)
+            atm.Density = 0
+            Lighting.FogEnd = 100000
+        elseif atm then
+            if FogConnection then FogConnection:Disconnect() end
+            atm.Density = 0.3
+        end
+    end
+})
+VisualTab:CreateToggle({ Name = "FullBright (Sáng đêm)", CurrentValue = false, Callback = function(v) Settings.FullBright = v end })
+VisualTab:CreateToggle({ Name = "Luôn là ban ngày", CurrentValue = false, Callback = function(v) Settings.AlwaysDay = v end })
 
-local WeaponsTab = Window:CreateTab("Weapons ")
-WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
-WeaponsTab:CreateToggle({ Name = "Unlock All Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
+-- TAB VŨ KHÍ
+local WeaponTab = Window:CreateTab("Vũ Khí 🔫")
+WeaponTab:CreateToggle({ Name = "Không giật (No Recoil)", CurrentValue = false, Callback = function(v) Settings.NoRecoil = v PatchWeapons() end })
+WeaponTab:CreateToggle({ Name = "Mở khóa chế độ bắn (Firemodes)", CurrentValue = false, Callback = function(v) Settings.UnlockFiremodes = v PatchWeapons() end })
 
 ------------------------------------------------------------------
--- [ SYSTEM LOOPS ]
+-- [[ HỆ THỐNG LOOP ]]
 ------------------------------------------------------------------
 
--- Cleanup & ESP Loop
+-- Loop cập nhật Hitbox & ESP
 task.spawn(function()
-    while not isUnloaded do
-        for model, data in pairs(activeNPCs) do
-            if not model.Parent or not isValidNPC(model) then
-                local h = model:FindFirstChild("ESP_Outline") if h then h:Destroy() end
-                local s = data.head:FindFirstChild("Wall_Box") if s then s:Destroy() end
-                activeNPCs[model] = nil
+    while not Settings.IsUnloaded do
+        for model, data in pairs(ActiveNPCs) do
+            if not model.Parent or not IsValidNPC(model) then
+                ActiveNPCs[model] = nil
             else
-                if outlineEnabled then applyOutline(model) end
+                ApplyESP(model)
+                local head = data.head
+                if head then
+                    if Settings.SilentEnabled then
+                        if not OriginalSizes[head] then OriginalSizes[head] = head.Size end
+                        ModifiedParts[head] = true
+                        head.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize)
+                        head.Transparency = Settings.ShowHitbox and 0.7 or head.Transparency
+                        head.CanCollide = false
+                    else
+                        if OriginalSizes[head] then
+                            head.Size = OriginalSizes[head]
+                            head.Transparency = 0
+                            head.CanCollide = true
+                            ModifiedParts[head] = nil
+                        end
+                    end
+                end
             end
         end
         task.wait(0.5)
     end
 end)
 
--- Hitbox Expander Loop
+-- Loop quét NPC mới
 task.spawn(function()
-    while not isUnloaded do
-        pcall(UpdateHitboxes)
-        task.wait(1)
-    end
-end)
-
--- Fast Scan Loop
-task.spawn(function()
-    while not isUnloaded do
-        if fastScanEnabled then
+    while not Settings.IsUnloaded do
+        if Settings.FastScan then
             for _, m in ipairs(Workspace:GetDescendants()) do
-                if not fastScanEnabled or isUnloaded then break end
-                if m:IsA("Model") and not activeNPCs[m] and isValidNPC(m) then
-                    addNPC(m)
+                if m:IsA("Model") and not ActiveNPCs[m] and IsValidNPC(m) then
+                    local head = m:FindFirstChild("Head") or m:FindFirstChild("UpperTorso")
+                    if head then ActiveNPCs[m] = { head = head } end
                 end
             end
         end
-        task.wait(2)
+        task.wait(5)
     end
 end)
 
-RunService.RenderStepped:Connect(function()
-    if isUnloaded then return end
-    if fullBrightEnabled then
-        lighting.Brightness = 2
-        lighting.Ambient = Color3.new(1, 1, 1)
+-- Loop Render Lighting
+RunService.Heartbeat:Connect(function()
+    if Settings.IsUnloaded then return end
+    if Settings.FullBright then
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
     end
-    if alwaysDayEnabled then lighting.ClockTime = 12 end
+    if Settings.AlwaysDay then Lighting.ClockTime = 12 end
 end)
 
--- Start
-for _, m in ipairs(Workspace:GetDescendants()) do if m:IsA("Model") and isValidNPC(m) then addNPC(m) end end
-Workspace.DescendantAdded:Connect(function(m) if m:IsA("Model") then task.delay(0.5, function() if isValidNPC(m) then addNPC(m) end end) end end)
+Rayfield:Notify({Title = "Tokai Hub", Content = "Script đã tải đầy đủ tính năng!", Duration = 5})
