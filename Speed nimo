@@ -1,42 +1,41 @@
 --[[ 
-    BRM5 SPEED BYPASS V7 - TỐI ƯU CHO DELTA EXECUTOR
-    Cơ chế: Linear Velocity Override (Bypass hoàn toàn Weight & Stamina)
-    Hướng dẫn: Nhập số, bấm Enter trên bàn phím điện thoại, sau đó bật ON.
+    BRM5 UNIVERSAL SPEED INJECTOR V10
+    Cơ chế: Task.Spawn High-Frequency Loop (Ghi đè mọi script khác)
+    Tối ưu: Delta Executor / Mobile Joystick
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Biến lưu cấu hình
-getgenv().SpeedV7 = {
+-- Cấu hình toàn cục (Global)
+getgenv().BypassV10 = {
     Enabled = false,
-    Value = 60, -- Tốc độ mục tiêu
-    CurrentBV = nil
+    Speed = 60, -- Tốc độ mục tiêu
 }
 
 -- ==========================================
--- 1. TẠO GIAO DIỆN (UI) - KÉO THẢ ĐƯỢC
+-- 1. TẠO GIAO DIỆN (UI) - DỄ NHÌN TRÊN MOBILE
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SpeedV7_Delta"
+ScreenGui.Name = "BypassV10_UI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = (game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui"))
 
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 200, 0, 130)
 Main.Position = UDim2.new(0.5, -100, 0.1, 0)
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Main.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 Main.Active = true
-Main.Draggable = true -- Cho phép kéo trên Mobile
+Main.Draggable = true 
 Main.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner", Main)
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "SPEED FIX V7"
-Title.TextColor3 = Color3.fromRGB(0, 255, 127)
+Title.Text = "SPEED BYPASS V10"
+Title.TextColor3 = Color3.fromRGB(255, 0, 0)
 Title.Font = Enum.Font.GothamBold
 Title.BackgroundTransparency = 1
 Title.Parent = Main
@@ -44,8 +43,8 @@ Title.Parent = Main
 local Toggle = Instance.new("TextButton")
 Toggle.Size = UDim2.new(0.85, 0, 0, 35)
 Toggle.Position = UDim2.new(0.075, 0, 0.35, 0)
-Toggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-Toggle.Text = "TRẠNG THÁI: TẮT"
+Toggle.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+Toggle.Text = "STATUS: OFF"
 Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
 Toggle.Font = Enum.Font.GothamSemibold
 Toggle.Parent = Main
@@ -54,68 +53,60 @@ Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 6)
 local Input = Instance.new("TextBox")
 Input.Size = UDim2.new(0.85, 0, 0, 30)
 Input.Position = UDim2.new(0.075, 0, 0.7, 0)
-Input.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Input.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 Input.Text = "60"
-Input.PlaceholderText = "Tốc độ (Ví dụ: 60)"
+Input.PlaceholderText = "Nhập tốc độ (Ví dụ: 60)"
 Input.TextColor3 = Color3.fromRGB(255, 255, 255)
 Input.Font = Enum.Font.Gotham
 Input.Parent = Main
 Instance.new("UICorner", Input).CornerRadius = UDim.new(0, 6)
 
 -- ==========================================
--- 2. LOGIC ĐIỀU KHIỂN UI
+-- 2. LOGIC ĐIỀU KHIỂN
 -- ==========================================
 Toggle.MouseButton1Click:Connect(function()
-    getgenv().SpeedV7.Enabled = not getgenv().SpeedV7.Enabled
-    Toggle.Text = getgenv().SpeedV7.Enabled and "TRẠNG THÁI: BẬT" or "TRẠNG THÁI: TẮT"
-    Toggle.BackgroundColor3 = getgenv().SpeedV7.Enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    getgenv().BypassV10.Enabled = not getgenv().BypassV10.Enabled
+    Toggle.Text = getgenv().BypassV10.Enabled and "STATUS: ON" or "STATUS: OFF"
+    Toggle.BackgroundColor3 = getgenv().BypassV10.Enabled and Color3.fromRGB(0, 100, 0) or Color3.fromRGB(100, 0, 0)
 end)
 
 Input.FocusLost:Connect(function()
     local val = tonumber(Input.Text)
     if val then 
-        getgenv().SpeedV7.Value = val 
+        getgenv().BypassV10.Speed = val 
     else 
-        Input.Text = tostring(getgenv().SpeedV7.Value) 
+        Input.Text = tostring(getgenv().BypassV10.Speed) 
     end
 end)
 
 -- ==========================================
--- 3. CƠ CHẾ BYPASS VẬT LÝ (CORE)
+-- 3. CƠ CHẾ BYPASS VẬT LÝ SIÊU CẤP (V10)
 -- ==========================================
-RunService.Stepped:Connect(function()
-    if not getgenv().SpeedV7.Enabled then 
-        if getgenv().SpeedV7.CurrentBV then
-            getgenv().SpeedV7.CurrentBV:Destroy()
-            getgenv().SpeedV7.CurrentBV = nil
-        end
-        return 
-    end
-    
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
-    
-    if hrp and hum and hum.Health > 0 then
-        -- Tạo hoặc lấy đối tượng LinearVelocity (Cách bypass mới của Roblox)
-        local bv = hrp:FindFirstChild("BypassVelocity")
-        if not bv then
-            bv = Instance.new("BodyVelocity")
-            bv.Name = "BypassVelocity"
-            bv.MaxForce = Vector3.new(100000, 0, 100000) -- Chỉ tác động lực ngang
-            bv.Parent = hrp
-            getgenv().SpeedV7.CurrentBV = bv
-        end
-        
-        -- Kiểm tra nếu người dùng đang di chuyển Joystick/Phím
-        if hum.MoveDirection.Magnitude > 0 then
-            -- Ép vận tốc theo hướng di chuyển
-            bv.Velocity = hum.MoveDirection * getgenv().SpeedV7.Value
-        else
-            -- Dừng lại nếu không chạm vào Joystick
-            bv.Velocity = Vector3.new(0, 0, 0)
+-- Sử dụng task.spawn để tạo vòng lặp độc lập, không bị ảnh hưởng bởi script cũ
+task.spawn(function()
+    while true do
+        task.wait() -- Chạy liên tục mỗi khi engine Roblox cho phép
+        if getgenv().BypassV10.Enabled then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
+                
+                if hrp and hum and hum.MoveDirection.Magnitude > 0 then
+                    -- Tính toán vận tốc theo hướng joystick
+                    local targetSpeed = getgenv().BypassV10.Speed
+                    local velocity = hum.MoveDirection * targetSpeed
+                    
+                    -- Ép vận tốc trực tiếp (AssemblyLinearVelocity)
+                    -- Trục Y giữ nguyên để không bị rơi hoặc bay
+                    hrp.AssemblyLinearVelocity = Vector3.new(velocity.X, hrp.AssemblyLinearVelocity.Y, velocity.Z)
+                    
+                    -- Thủ thuật bypass ma sát của BRM5: Dịch nhẹ CFrame để "lướt"
+                    hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (targetSpeed / 100))
+                end
+            end)
         end
     end
 end)
 
-print("Speed V7 đã tải thành công cho Delta Mobile!")
+print("V10 Universal Speed Loaded! Hãy bật Status và cầm tay không di chuyển.")
