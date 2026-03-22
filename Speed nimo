@@ -1,244 +1,132 @@
--- Bảng điều khiển (UI) WalkSpeed cho BRM5
--- Tự động căn chỉnh tốc độ bằng CFrame và giao diện kéo thả
+--[[
+    BRM5 ULTRA SPEED HACK (PC & MOBILE)
+    Phương pháp: CFrame Delta Injection (Bypass Rubberbanding)
+]]
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
--- Các biến trạng thái WalkSpeed
-local WalkSpeedState = {
+-- Cấu hình mặc định
+getgenv().SpeedSettings = {
     Enabled = false,
-    Speed = 50 -- Tốc độ mặc định khi vừa mở
+    Multiplier = 2 -- Mặc định nhanh gấp đôi. Đừng chỉnh quá cao kẻo bị kick.
 }
 
--- Hàm tìm Module (Dành cho BRM5)
-local function findModule(name)
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("ModuleScript") and v.Name == name then
-            return v
-        end
-    end
-    return nil
-end
-
 -- ==========================================
--- 1. TẠO GIAO DIỆN (UI)
+-- 1. TẠO GIAO DIỆN (UI) TỐI GIẢN
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BRM5_SpeedUI"
+ScreenGui.Name = "UltraSpeed_BRM5"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = (game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui"))
 
--- Thêm vào CoreGui để tránh bị phát hiện (nếu không có CoreGui thì dùng PlayerGui)
-local success, err = pcall(function()
-    ScreenGui.Parent = CoreGui
-end)
-if not success then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
-
--- Khung chính
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.5, -125, 0.5, -75)
-MainFrame.Size = UDim2.new(0, 250, 0, 150)
+MainFrame.Size = UDim2.new(0, 220, 0, 140)
+MainFrame.Position = UDim2.new(0.5, -110, 0.3, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
+MainFrame.Draggable = true -- Hỗ trợ kéo thả nhanh
+MainFrame.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.CornerRadius = UDim.new(0, 10)
 UICorner.Parent = MainFrame
 
--- Tiêu đề
 local Title = Instance.new("TextLabel")
-Title.Name = "Title"
-Title.Parent = MainFrame
+Title.Size = UDim2.new(1, 0, 0, 35)
 Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, 0, 0, 10)
-Title.Size = UDim2.new(1, 0, 0, 20)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "BRM5 WalkSpeed"
+Title.Text = "BRM5 SPEED"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBold
 Title.TextSize = 16
+Title.Parent = MainFrame
 
--- Nút Bật/Tắt (Toggle)
+-- Nút Bật/Tắt
 local ToggleBtn = Instance.new("TextButton")
-ToggleBtn.Name = "Toggle"
-ToggleBtn.Parent = MainFrame
-ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Màu đỏ (Tắt)
-ToggleBtn.Position = UDim2.new(0.1, 0, 0.3, 0)
-ToggleBtn.Size = UDim2.new(0.8, 0, 0, 35)
-ToggleBtn.Font = Enum.Font.GothamSemibold
-ToggleBtn.Text = "Status: OFF"
+ToggleBtn.Size = UDim2.new(0.85, 0, 0, 40)
+ToggleBtn.Position = UDim2.new(0.075, 0, 0.3, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+ToggleBtn.Text = "TRẠNG THÁI: TẮT"
 ToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleBtn.Font = Enum.Font.GothamSemibold
 ToggleBtn.TextSize = 14
+ToggleBtn.Parent = MainFrame
 
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 6)
-ToggleCorner.Parent = ToggleBtn
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = ToggleBtn
 
--- Thanh kéo (Slider)
-local SliderText = Instance.new("TextLabel")
-SliderText.Parent = MainFrame
-SliderText.BackgroundTransparency = 1
-SliderText.Position = UDim2.new(0.1, 0, 0.6, 0)
-SliderText.Size = UDim2.new(0.8, 0, 0, 20)
-SliderText.Font = Enum.Font.Gotham
-SliderText.Text = "Speed: " .. WalkSpeedState.Speed
-SliderText.TextColor3 = Color3.fromRGB(200, 200, 200)
-SliderText.TextSize = 14
-SliderText.TextXAlignment = Enum.TextXAlignment.Left
+-- Ô nhập số (Hỗ trợ tốt nhất cho cả PC/Mobile)
+local InputBox = Instance.new("TextBox")
+InputBox.Size = UDim2.new(0.85, 0, 0, 35)
+InputBox.Position = UDim2.new(0.075, 0, 0.65, 0)
+InputBox.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+InputBox.Text = "2"
+InputBox.PlaceholderText = "Số lần tốc độ (Ví dụ: 2, 3...)"
+InputBox.TextColor3 = Color3.fromRGB(0, 200, 255)
+InputBox.Font = Enum.Font.Gotham
+InputBox.TextSize = 14
+InputBox.Parent = MainFrame
 
-local SliderBG = Instance.new("Frame")
-SliderBG.Name = "SliderBG"
-SliderBG.Parent = MainFrame
-SliderBG.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-SliderBG.Position = UDim2.new(0.1, 0, 0.75, 0)
-SliderBG.Size = UDim2.new(0.8, 0, 0, 10)
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 6)
+InputCorner.Parent = InputBox
 
-local SliderBGCorner = Instance.new("UICorner")
-SliderBGCorner.CornerRadius = UDim.new(1, 0)
-SliderBGCorner.Parent = SliderBG
-
-local SliderFill = Instance.new("Frame")
-SliderFill.Name = "SliderFill"
-SliderFill.Parent = SliderBG
-SliderFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-SliderFill.Size = UDim2.new(0.5, 0, 1, 0) -- Mặc định 50%
-
-local SliderFillCorner = Instance.new("UICorner")
-SliderFillCorner.CornerRadius = UDim.new(1, 0)
-SliderFillCorner.Parent = SliderFill
-
-local SliderBtn = Instance.new("TextButton")
-SliderBtn.Name = "SliderBtn"
-SliderBtn.Parent = SliderBG
-SliderBtn.BackgroundTransparency = 1
-SliderBtn.Size = UDim2.new(1, 0, 1, 0)
-SliderBtn.Text = ""
+local HelpText = Instance.new("TextLabel")
+HelpText.Size = UDim2.new(1, 0, 0, 20)
+HelpText.Position = UDim2.new(0, 0, 0.9, 0)
+HelpText.BackgroundTransparency = 1
+HelpText.Text = "Nhập số rồi bấm Enter để đổi tốc độ"
+HelpText.TextColor3 = Color3.fromRGB(150, 150, 150)
+HelpText.Font = Enum.Font.Gotham
+HelpText.TextSize = 10
+HelpText.Parent = MainFrame
 
 -- ==========================================
--- 2. LOGIC TƯƠNG TÁC UI (KÉO THẢ, CLICK)
+-- 2. LOGIC ĐIỀU KHIỂN
 -- ==========================================
--- Logic Kéo thả UI (Draggable)
-local dragging, dragInput, dragStart, startPos
-MainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-MainFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
--- Logic Nút Bật/Tắt
 ToggleBtn.MouseButton1Click:Connect(function()
-    WalkSpeedState.Enabled = not WalkSpeedState.Enabled
-    if WalkSpeedState.Enabled then
-        ToggleBtn.Text = "Status: ON"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50) -- Màu xanh
+    getgenv().SpeedSettings.Enabled = not getgenv().SpeedSettings.Enabled
+    if getgenv().SpeedSettings.Enabled then
+        ToggleBtn.Text = "TRẠNG THÁI: BẬT"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(50, 180, 50)
     else
-        ToggleBtn.Text = "Status: OFF"
-        ToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Màu đỏ
+        ToggleBtn.Text = "TRẠNG THÁI: TẮT"
+        ToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
     end
 end)
 
--- Logic Thanh kéo (Slider)
-local draggingSlider = false
-local minSpeed = 16
-local maxSpeed = 200
+InputBox.FocusLost:Connect(function()
+    local val = tonumber(InputBox.Text)
+    if val then
+        getgenv().SpeedSettings.Multiplier = val
+    else
+        InputBox.Text = tostring(getgenv().SpeedSettings.Multiplier)
+    end
+end)
 
-local function updateSlider(input)
-    local pos = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
-    SliderFill.Size = UDim2.new(pos, 0, 1, 0)
+-- ==========================================
+-- 3. VÒNG LẶP SPEED BYPASS (CƠ CHẾ CHÍNH)
+-- ==========================================
+RunService.Stepped:Connect(function(dt)
+    if not getgenv().SpeedSettings.Enabled then return end
     
-    local newSpeed = math.floor(minSpeed + (maxSpeed - minSpeed) * pos)
-    WalkSpeedState.Speed = newSpeed
-    SliderText.Text = "Speed: " .. newSpeed
-end
-
-SliderBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingSlider = true
-        updateSlider(input)
+    local Character = LocalPlayer.Character
+    local RootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+    local Humanoid = Character and Character:FindFirstChild("Humanoid")
+    
+    -- Kiểm tra nếu nhân vật đang di chuyển (MoveDirection > 0)
+    if RootPart and Humanoid and Humanoid.MoveDirection.Magnitude > 0 then
+        -- Công thức: Vị trí hiện tại + (Hướng đi * (Sức mạnh x DeltaTime))
+        -- Điều này cộng dồn vào chuyển động gốc của game mà không bị Anti-cheat phát hiện là 'dịch chuyển'
+        local speedMultiplier = (getgenv().SpeedSettings.Multiplier - 1) * 16
+        local moveDelta = Humanoid.MoveDirection * (speedMultiplier * dt)
+        
+        RootPart.CFrame = RootPart.CFrame + moveDelta
     end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingSlider = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        updateSlider(input)
-    end
-end)
-
--- Cập nhật thanh trượt ban đầu
-SliderFill.Size = UDim2.new((WalkSpeedState.Speed - minSpeed) / (maxSpeed - minSpeed), 0, 1, 0)
-
-
--- ==========================================
--- 3. LOGIC HACK WALKSPEED (HOOK)
--- ==========================================
-local CharControllerMod = findModule("CharacterController")
-
-if CharControllerMod then
-    local CharController = require(CharControllerMod)
-
-    -- Lưu lại hàm Update gốc của game
-    if not getgenv().OldCharUpdate then
-        getgenv().OldCharUpdate = CharController.Update
-    end
-
-    -- Ghi đè hàm Update
-    CharController.Update = function(self, dt, ...)
-        -- Chạy hàm gốc của game trước
-        local result = getgenv().OldCharUpdate(self, dt, ...)
-
-        -- Can thiệp nếu người dùng bật WalkSpeed
-        if WalkSpeedState.Enabled and LocalPlayer.Character then
-            local character = LocalPlayer.Character
-            local humanoid = character:FindFirstChild("Humanoid")
-            local hrp = character:FindFirstChild("HumanoidRootPart")
-
-            -- Nếu nhân vật tồn tại, còn sống và đang cố di chuyển
-            if humanoid and hrp and humanoid.Health > 0 and humanoid.MoveDirection.Magnitude > 0 then
-                -- Tốc độ cộng thêm = Tốc độ mục tiêu - Tốc độ mặc định của game (khoảng 16)
-                local extraSpeed = WalkSpeedState.Speed - 16
-                
-                if extraSpeed > 0 then
-                    -- Đẩy nhân vật bằng CFrame (nhân với dt để không bị giật lag khung hình)
-                    hrp.CFrame = hrp.CFrame + (humanoid.MoveDirection * (extraSpeed * dt))
-                end
-            end
-        end
-
-        return result
-    end
-else
-    warn("Không tìm thấy module CharacterController. Hãy chắc chắn bạn đang ở trong game BRM5.")
-end
-
-print("Đã tải xong BRM5 WalkSpeed UI!")
+print("BRM5 Speed Script Loaded Successfully!")
