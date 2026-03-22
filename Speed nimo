@@ -1,115 +1,126 @@
 --[[
-    BRM5 FINAL SPEED BYPASS (PHYSICS INJECTION)
+    BRM5 ABSOLUTE SPEED BYPASS
+    Cơ chế: Hooking nội hàm CharacterController (Bypass Friction & Acceleration)
     Hỗ trợ: PC & Mobile
-    Cơ chế: BodyVelocity Forced Movement (Vượt qua Rubberbanding)
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Cấu hình
-getgenv().SpeedConfig = {
+-- Cấu hình toàn cục
+getgenv().SpeedHack = {
     Enabled = false,
-    Value = 50 -- Tốc độ chạy (Mặc định game là 16)
+    Value = 60, -- Tốc độ mong muốn (Mặc định game là ~16-22)
+    OriginalUpdate = nil
 }
 
+-- Hàm tìm Module (Đặc thù cho BRM5)
+local function GetModule(name)
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("ModuleScript") and v.Name == name then
+            return v
+        end
+    end
+    return nil
+end
+
 -- ==========================================
--- 1. TẠO GIAO DIỆN (UI)
+-- 1. TẠO GIAO DIỆN (UI) KÉO THẢ
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "BRM5_Speed_Final"
+ScreenGui.Name = "BRM5_Absolute_Speed"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = (game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui"))
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 220, 0, 130)
+Main.Size = UDim2.new(0, 220, 0, 140)
 Main.Position = UDim2.new(0.5, -110, 0.2, 0)
-Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Main.BorderSizePixel = 0
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Main.Active = true
 Main.Draggable = true
 Main.Parent = ScreenGui
 
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, 10)
-Corner.Parent = Main
+local UICorner = Instance.new("UICorner", Main)
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 35)
-Title.Text = "SPEED BYPASS v3"
+Title.Text = "BRM5 SPEED BYPASS"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.BackgroundTransparency = 1
 Title.Parent = Main
 
 local Toggle = Instance.new("TextButton")
-Toggle.Size = UDim2.new(0.85, 0, 0, 35)
+Toggle.Size = UDim2.new(0.85, 0, 0, 40)
 Toggle.Position = UDim2.new(0.075, 0, 0.3, 0)
-Toggle.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+Toggle.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
 Toggle.Text = "TRẠNG THÁI: TẮT"
 Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
 Toggle.Font = Enum.Font.GothamSemibold
 Toggle.Parent = Main
+Instance.new("UICorner", Toggle)
 
-local SliderBox = Instance.new("TextBox")
-SliderBox.Size = UDim2.new(0.85, 0, 0, 30)
-SliderBox.Position = UDim2.new(0.075, 0, 0.65, 0)
-SliderBox.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-SliderBox.Text = "50"
-SliderBox.PlaceholderText = "Nhập tốc độ (16-150)"
-SliderBox.TextColor3 = Color3.fromRGB(0, 255, 150)
-SliderBox.Font = Enum.Font.Gotham
-SliderBox.Parent = Main
-
-Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0, 6)
-Instance.new("UICorner", SliderBox).CornerRadius = UDim.new(0, 6)
+local SpeedInput = Instance.new("TextBox")
+SpeedInput.Size = UDim2.new(0.85, 0, 0, 35)
+SpeedInput.Position = UDim2.new(0.075, 0, 0.65, 0)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+SpeedInput.Text = "60"
+SpeedInput.PlaceholderText = "Nhập tốc độ (Ví dụ: 60)"
+SpeedInput.TextColor3 = Color3.fromRGB(0, 200, 255)
+SpeedInput.Parent = Main
+Instance.new("UICorner", SpeedInput)
 
 -- ==========================================
 -- 2. LOGIC ĐIỀU KHIỂN
 -- ==========================================
 Toggle.MouseButton1Click:Connect(function()
-    getgenv().SpeedConfig.Enabled = not getgenv().SpeedConfig.Enabled
-    Toggle.Text = getgenv().SpeedConfig.Enabled and "TRẠNG THÁI: BẬT" or "TRẠNG THÁI: TẮT"
-    Toggle.BackgroundColor3 = getgenv().SpeedConfig.Enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    getgenv().SpeedHack.Enabled = not getgenv().SpeedHack.Enabled
+    Toggle.Text = getgenv().SpeedHack.Enabled and "TRẠNG THÁI: BẬT" or "TRẠNG THÁI: TẮT"
+    Toggle.BackgroundColor3 = getgenv().SpeedHack.Enabled and Color3.fromRGB(50, 180, 50) or Color3.fromRGB(180, 50, 50)
 end)
 
-SliderBox.FocusLost:Connect(function()
-    local num = tonumber(SliderBox.Text)
-    if num then getgenv().SpeedConfig.Value = num else SliderBox.Text = tostring(getgenv().SpeedConfig.Value) end
+SpeedInput.FocusLost:Connect(function()
+    local val = tonumber(SpeedInput.Text)
+    if val then getgenv().SpeedHack.Value = val else SpeedInput.Text = tostring(getgenv().SpeedHack.Value) end
 end)
 
 -- ==========================================
--- 3. VÒNG LẶP VẬT LÝ (BYPASS CHÍNH)
+-- 3. HOOK CHARACTER CONTROLLER (CƠ CHẾ CHÍNH)
 -- ==========================================
--- Tạo một BodyVelocity giả lập để ép nhân vật di chuyển
-local bv = Instance.new("BodyVelocity")
-bv.MaxForce = Vector3.new(0, 0, 0) -- Mặc định không có lực
-bv.Velocity = Vector3.new(0, 0, 0)
+local CharacterControllerMod = GetModule("CharacterController")
 
-RunService.RenderStepped:Connect(function()
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
+if CharacterControllerMod then
+    local CharController = require(CharacterControllerMod)
     
-    if hrp and hum and getgenv().SpeedConfig.Enabled then
-        -- Chỉ kích hoạt lực khi người chơi đang di chuyển
-        if hum.MoveDirection.Magnitude > 0 then
-            bv.Parent = hrp
-            bv.MaxForce = Vector3.new(100000, 0, 100000) -- Chỉ tác động lực ngang, không làm bay lên trời
-            bv.Velocity = hum.MoveDirection * getgenv().SpeedConfig.Value
-        else
-            bv.MaxForce = Vector3.new(0, 0, 0)
-            bv.Velocity = Vector3.new(0, 0, 0)
-        end
-    else
-        bv.Parent = nil
+    -- Sao lưu hàm Update gốc
+    if not getgenv().SpeedHack.OriginalUpdate then
+        getgenv().SpeedHack.OriginalUpdate = CharController.Update
     end
-end)
-
--- Reset khi nhân vật chết
-LocalPlayer.CharacterAdded:Connect(function(newChar)
-    bv.Parent = nil
-end)
-
-print("BRM5 Speed Bypass v3 Loaded!")
+    
+    -- Ghi đè (Hook) hàm Update để can thiệp vào vật lý mỗi frame
+    CharController.Update = function(self, dt, ...)
+        -- Chạy logic gốc để game không bị lỗi animation
+        local result = getgenv().SpeedHack.OriginalUpdate(self, dt, ...)
+        
+        -- Nếu bật Hack và đang di chuyển
+        if getgenv().SpeedHack.Enabled and LocalPlayer.Character then
+            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+            
+            if hrp and hum and hum.MoveDirection.Magnitude > 0 then
+                -- Ép vị trí (CFrame Injection) ngay trong lúc game đang tính toán vận tốc
+                -- Đây là cách bypass ma sát của BRM5 hiệu quả nhất
+                local multiplier = (getgenv().SpeedHack.Value / 16) -- Tính tỉ lệ so với tốc độ gốc
+                local moveOffset = hum.MoveDirection * ((getgenv().SpeedHack.Value - 16) * dt)
+                
+                hrp.CFrame = hrp.CFrame + moveOffset
+            end
+        end
+        
+        return result
+    end
+    print("Đã Hook thành công CharacterController!")
+else
+    warn("LỖI: Không tìm thấy hệ thống điều khiển nhân vật của BRM5.")
+end
