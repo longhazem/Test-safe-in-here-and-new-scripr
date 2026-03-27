@@ -39,16 +39,19 @@ if not _G.BackgroundState then
     }
 end
 
+-- Cập nhật ID âm thanh Click mới
 local function PlayCustomClick()
     local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://126347354635406"
+    sound.SoundId = "rbxassetid://102702078778790"
     sound.Volume = 0.8
     sound.Parent = SoundService
     sound:Play()
     sound.Ended:Connect(function() sound:Destroy() end)
 end
 
+-- Dùng chung Custom Logo cho cả Hub nếu muốn (ở đây mình vẫn giữ logo cũ cho Hub, logo mới cho Loading)
 local logoID = "rbxthumb://type=Asset&id=99217897221957&w=420&h=420"
+local loadingLogoID = "rbxthumb://type=Asset&id=111656734345667&w=150&h=150"
 
 ---------------------------------------------------------
 -- HỆ THỐNG LOADING UI
@@ -73,7 +76,7 @@ local function CreateLoadingScreen(onComplete)
     bgOverlay.BorderSizePixel = 0
 
     local loadFrame = Instance.new("Frame", bgOverlay)
-    loadFrame.Size = UDim2.new(0, 320, 0, 170)
+    loadFrame.Size = UDim2.new(0, 320, 0, 180) -- Tăng chiều cao một chút để logo thoáng hơn
     loadFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     loadFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     loadFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -90,19 +93,19 @@ local function CreateLoadingScreen(onComplete)
     glowFrame.ImageTransparency = 0.5
     glowFrame.ZIndex = 0
 
-    -- Ảnh Loading Custom của bạn
+    -- Ảnh Loading Custom được làm to và rõ ràng hơn
     local customLogo = Instance.new("ImageLabel", loadFrame)
-    customLogo.Size = UDim2.new(0, 65, 0, 65)
+    customLogo.Size = UDim2.new(0, 75, 0, 75)
     customLogo.Position = UDim2.new(0.5, 0, 0, 15)
     customLogo.AnchorPoint = Vector2.new(0.5, 0)
     customLogo.BackgroundTransparency = 1
-    customLogo.Image = "rbxassetid://111656734345667"
+    customLogo.Image = loadingLogoID
     customLogo.ScaleType = Enum.ScaleType.Fit
     Instance.new("UICorner", customLogo).CornerRadius = UDim.new(0, 8)
 
     local title = Instance.new("TextLabel", loadFrame)
     title.Size = UDim2.new(1, 0, 0, 20)
-    title.Position = UDim2.new(0, 0, 0, 90)
+    title.Position = UDim2.new(0, 0, 0, 100)
     title.BackgroundTransparency = 1
     title.Text = "TOKAI HUB"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -111,7 +114,7 @@ local function CreateLoadingScreen(onComplete)
 
     local status = Instance.new("TextLabel", loadFrame)
     status.Size = UDim2.new(1, 0, 0, 15)
-    status.Position = UDim2.new(0, 0, 0, 115)
+    status.Position = UDim2.new(0, 0, 0, 125)
     status.BackgroundTransparency = 1
     status.Text = "Đang tải dữ liệu..."
     status.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -120,7 +123,7 @@ local function CreateLoadingScreen(onComplete)
 
     local barBg = Instance.new("Frame", loadFrame)
     barBg.Size = UDim2.new(0, 260, 0, 6)
-    barBg.Position = UDim2.new(0.5, 0, 0, 145)
+    barBg.Position = UDim2.new(0.5, 0, 0, 155)
     barBg.AnchorPoint = Vector2.new(0.5, 0)
     barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
