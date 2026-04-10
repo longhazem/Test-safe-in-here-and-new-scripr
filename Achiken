@@ -50,6 +50,20 @@ local zombieColor = Color3.fromRGB(255, 0, 0)
 local hitboxVisualColor = Color3.fromRGB(255, 0, 0) 
 local noFogConnection = nil
 
+-- Hệ thống âm thanh
+local function playSound(soundId)
+    task.spawn(function()
+        local sound = Instance.new("Sound")
+        sound.SoundId = "rbxassetid://" .. tostring(soundId)
+        sound.Parent = SoundService
+        sound.Volume = 1
+        sound:Play()
+        sound.Ended:Connect(function()
+            sound:Destroy()
+        end)
+    end)
+end
+
 local function clearNVG(gui)
     if nvgEnabled and gui:IsA("ScreenGui") and gui.Name == "NVGInterface" then
         gui:Destroy()
@@ -204,6 +218,8 @@ task.spawn(function()
             if antiDamageEnabled and localPlayer.Character then
                 local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if root and root.AssemblyLinearVelocity.Y < -60 then
+                    -- Phát âm thanh khi rơi (Fall Damage Sound)
+                    playSound(139836635302855)
                     root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
                 end
             end
@@ -306,18 +322,20 @@ CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, C
 
 local CharacterTab = Window:CreateTab("Character 👤")
 CharacterTab:CreateToggle({ 
-    Name = "Anti Fall / Anti Damage", 
+    Name = "Anti Fall / Anti Damage no worrk soon fix", 
     CurrentValue = false, 
     Callback = function(v) 
         antiDamageEnabled = v 
     end 
 })
 CharacterTab:CreateButton({
-    Name = "Fly & Walkspeed (Coming Soon)",
+    Name = "Fly & Walkspeed (Coming Soon) dont click ",
     Callback = function()
+        -- Phát âm thanh khi nhấn nút
+        playSound(109033035962147)
         Rayfield:Notify({
-            Title = "Thông báo",
-            Content = "Tính năng sẽ sớm ra mắt!",
+            Title = "lol why you click",
+            Content = "comsoon!",
             Duration = 3,
             Image = 4483362458,
         })
@@ -350,7 +368,7 @@ VisibleTab:CreateToggle({
     end
 })
 VisibleTab:CreateToggle({
-    Name = "No Bob (Camera)",
+    Name = "No Bob (Camera) dont on it",
     CurrentValue = false,
     Callback = function(v)
         noBobEnabled = v
@@ -402,7 +420,6 @@ WeaponsTab:CreateToggle({
     end
 }):ToolTip("Trang bị lại vũ khí để áp dụng/hủy bỏ")
 
--- Sử dụng CreateInput để cho phép nhập số thay vì Slider
 WeaponsTab:CreateInput({
     Name = "Round Per Minute (RPM)",
     PlaceholderText = "1 - 1000",
@@ -410,13 +427,11 @@ WeaponsTab:CreateInput({
     Callback = function(Text)
         local num = tonumber(Text)
         if num then
-            -- Giới hạn giá trị nhập từ 1 đến 1000
             patchOptions.rpmValue = math.clamp(num, 1, 1000)
             if patchOptions.rapidFire then
                 patchWeapons()
             end
         else
-            -- Nếu nhập chữ hoặc để trống, đặt về mặc định
             patchOptions.rpmValue = 1000
         end
     end
