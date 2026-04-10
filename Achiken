@@ -50,18 +50,37 @@ local zombieColor = Color3.fromRGB(255, 0, 0)
 local hitboxVisualColor = Color3.fromRGB(255, 0, 0) 
 local noFogConnection = nil
 
--- Hệ thống âm thanh
-local function playSound(soundId)
-    task.spawn(function()
-        local sound = Instance.new("Sound")
-        sound.SoundId = "rbxassetid://" .. tostring(soundId)
-        sound.Parent = SoundService
-        sound.Volume = 1
-        sound:Play()
+-- === HỆ THỐNG ÂM THANH NÂNG CẤP ===
+local activeLoopingSounds = {}
+
+local function playSound(soundId, isLoop)
+    -- Nếu đang loop âm thanh này rồi thì không tạo thêm
+    if isLoop and activeLoopingSounds[soundId] then return end
+
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://" .. tostring(soundId)
+    sound.Parent = SoundService
+    sound.Volume = 1
+    sound.Looped = isLoop or false
+    
+    sound:Play()
+    
+    if isLoop then
+        activeLoopingSounds[soundId] = sound
+    else
         sound.Ended:Connect(function()
             sound:Destroy()
         end)
-    end)
+    end
+    return sound
+end
+
+local function stopSound(soundId)
+    if activeLoopingSounds[soundId] then
+        activeLoopingSounds[soundId]:Stop()
+        activeLoopingSounds[soundId]:Destroy()
+        activeLoopingSounds[soundId] = nil
+    end
 end
 
 local function clearNVG(gui)
@@ -102,7 +121,6 @@ local function patchWeapons()
                                 local success, receiver = pcall(require, child)
                                 if success and receiver and receiver.Config and receiver.Config.Tune then
                                     local tune = receiver.Config.Tune
-                                    
                                     if patchOptions.recoil then
                                         tune.Recoil_X = 0 
                                         tune.Recoil_Z = 0 
@@ -111,11 +129,9 @@ local function patchWeapons()
                                         tune.Recoil_Range = Vector2.zero
                                         tune.Recoil_Camera = 0 
                                     end
-                                    
                                     if patchOptions.firemodes then 
                                         tune.Firemodes = {3, 2, 1, 0} 
                                     end
-
                                     if patchOptions.rapidFire then
                                         tune.RoF = patchOptions.rpmValue
                                     end
@@ -158,7 +174,6 @@ end
 -- === CÁC HOOKS CỦA GAME ===
 task.spawn(function()
     pcall(function()
-        -- 1. Hook Weapon / Recoil
         local getMuzzle = filtergc('function', {Name = 'GetMuzzleCFrame'}, true)
         local getRecoil = filtergc('function', {Name = 'getRecoil'}, true)
 
@@ -186,7 +201,6 @@ task.spawn(function()
             end)
         end
         
-        -- 2. Hook Camera (No Bob)
         local characterCamera = filtergc('table', {Name = "CharacterCamera"}, true)
         if characterCamera and characterCamera.Update then
             local oldCamUpdate; oldCamUpdate = hookfunction(characterCamera.Update, function(...)
@@ -199,7 +213,6 @@ task.spawn(function()
             end)
         end
         
-        -- 3. Hook Namecall (Anti Damage)
         local OldNamecall
         OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
             local Method = getnamecallmethod()
@@ -218,8 +231,6 @@ task.spawn(function()
             if antiDamageEnabled and localPlayer.Character then
                 local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if root and root.AssemblyLinearVelocity.Y < -60 then
-                    -- Phát âm thanh khi rơi (Fall Damage Sound)
-                    playSound(139836635302855)
                     root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
                 end
             end
@@ -322,20 +333,26 @@ CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, C
 
 local CharacterTab = Window:CreateTab("Character 👤")
 CharacterTab:CreateToggle({ 
-    Name = "Anti Fall / Anti Damage no worrk soon fix", 
+    Name = "Anti Fall / Anti Damage", 
     CurrentValue = false, 
     Callback = function(v) 
         antiDamageEnabled = v 
+        local soundID = 139836635302855
+        if v then
+            playSound(soundID, true) -- Bật là kêu luôn và lặp lại
+        else
+            stopSound(soundID) -- Tắt là dừng luôn
+        end
     end 
 })
+
 CharacterTab:CreateButton({
-    Name = "Fly & Walkspeed (Coming Soon) dont click ",
+    Name = "Fly & Walkspeed (Coming Soon)",
     Callback = function()
-        -- Phát âm thanh khi nhấn nút
         playSound(109033035962147)
         Rayfield:Notify({
-            Title = "lol why you click",
-            Content = "comsoon!",
+            Title = "Thông báo",
+            Content = "Tính năng sắp ra mắt!",
             Duration = 3,
             Image = 4483362458,
         })
@@ -367,24 +384,14 @@ VisibleTab:CreateToggle({
         for model, _ in pairs(activeNPCs) do applyOutline(model) end
     end
 })
-VisibleTab:CreateToggle({
-    Name = "No Bob (Camera) dont on it",
-    CurrentValue = false,
-    Callback = function(v)
-        noBobEnabled = v
-    end
-})
-VisibleTab:CreateToggle({ Name = "NPC Scan (😱)", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
+VisibleTab:CreateToggle({ Name = "No Bob (Camera)", CurrentValue = false, Callback = function(v) noBobEnabled = v end })
+VisibleTab:CreateToggle({ Name = "NPC Scan", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
 VisibleTab:CreateToggle({
     Name = "Remove NVG Interface",
     CurrentValue = false,
     Callback = function(v)
         nvgEnabled = v
-        if v then
-            for _, gui in ipairs(playerGui:GetChildren()) do
-                clearNVG(gui)
-            end
-        end
+        if v then for _, gui in ipairs(playerGui:GetChildren()) do clearNVG(gui) end end
     end
 })
 VisibleTab:CreateToggle({
@@ -410,41 +417,12 @@ VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = 
 local WeaponsTab = Window:CreateTab("Weapons 🔫")
 WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
 WeaponsTab:CreateToggle({ Name = "Unlock Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
-
-WeaponsTab:CreateToggle({
-    Name = "Rapid Fire",
-    CurrentValue = false,
-    Callback = function(v)
-        patchOptions.rapidFire = v
-        patchWeapons()
-    end
-}):ToolTip("Trang bị lại vũ khí để áp dụng/hủy bỏ")
-
-WeaponsTab:CreateInput({
-    Name = "Round Per Minute (RPM)",
-    PlaceholderText = "1 - 1000",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(Text)
-        local num = tonumber(Text)
-        if num then
-            patchOptions.rpmValue = math.clamp(num, 1, 1000)
-            if patchOptions.rapidFire then
-                patchWeapons()
-            end
-        else
-            patchOptions.rpmValue = 1000
-        end
-    end
-})
+WeaponsTab:CreateToggle({ Name = "Rapid Fire", CurrentValue = false, Callback = function(v) patchOptions.rapidFire = v patchWeapons() end })
 
 task.spawn(function()
     while not isUnloaded do
         for model, data in pairs(activeNPCs) do
-            if not model.Parent then
-                activeNPCs[model] = nil
-            else
-                if outlineEnabled then applyOutline(model) end
-            end
+            if not model.Parent then activeNPCs[model] = nil end
         end
         task.wait(0.5)
     end
@@ -463,30 +441,12 @@ task.spawn(function()
     end
 end)
 
-task.spawn(function()
-    while not isUnloaded do
-        if fastScanEnabled then
-            local items = Workspace:GetDescendants()
-            for i, m in ipairs(items) do
-                if not fastScanEnabled or isUnloaded then break end
-                if m:IsA("Model") and not activeNPCs[m] and isValidNPC(m) then
-                    addNPC(m)
-                end
-                if i % 300 == 0 then task.wait() end 
-            end
-        end
-        task.wait(0.001)
-    end
-end)
-
 RunService.RenderStepped:Connect(function()
-    centerPosition = camera.ViewportSize / 2
     if fovCircle then
         fovCircle.Visible = (showFovCircle and silentAimEnabled)
-        fovCircle.Position = centerPosition
+        fovCircle.Position = camera.ViewportSize / 2
         fovCircle.Radius = fovRadius
     end
-
     if fullBrightEnabled then
         lighting.Brightness = 2
         lighting.Ambient = Color3.new(1, 1, 1)
