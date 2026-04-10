@@ -30,7 +30,7 @@ local fullBrightEnabled = false
 local alwaysDayEnabled = false
 local fastScanEnabled = false
 local nvgEnabled = false
-local noBobEnabled = false -- Biến cho No Bob
+local noBobEnabled = false
 local isUnloaded = false     
 local patchOptions = { 
     recoil = false, 
@@ -402,15 +402,22 @@ WeaponsTab:CreateToggle({
     end
 }):ToolTip("Trang bị lại vũ khí để áp dụng/hủy bỏ")
 
-WeaponsTab:CreateSlider({
-    Name = "Round Per Minute",
-    Range = {1, 1000},
-    Increment = 1,
-    CurrentValue = 1000,
-    Callback = function(v)
-        patchOptions.rpmValue = v
-        if patchOptions.rapidFire then
-            patchWeapons()
+-- Sử dụng CreateInput để cho phép nhập số thay vì Slider
+WeaponsTab:CreateInput({
+    Name = "Round Per Minute (RPM)",
+    PlaceholderText = "1 - 1000",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        local num = tonumber(Text)
+        if num then
+            -- Giới hạn giá trị nhập từ 1 đến 1000
+            patchOptions.rpmValue = math.clamp(num, 1, 1000)
+            if patchOptions.rapidFire then
+                patchWeapons()
+            end
+        else
+            -- Nếu nhập chữ hoặc để trống, đặt về mặc định
+            patchOptions.rpmValue = 1000
         end
     end
 })
