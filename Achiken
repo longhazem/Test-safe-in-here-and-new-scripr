@@ -30,11 +30,17 @@ local fullBrightEnabled = false
 local alwaysDayEnabled = false
 local fastScanEnabled = false
 local nvgEnabled = false
+local noBobEnabled = false -- Biến cho No Bob
 local isUnloaded = false     
-local patchOptions = { recoil = false, firemodes = false }
+local patchOptions = { 
+    recoil = false, 
+    firemodes = false,
+    rapidFire = false,
+    rpmValue = 1000
+}
 
 local silentAimEnabled = false
-local antiDamageEnabled = false -- Biến cho chức năng Anti Fall/Take Damage
+local antiDamageEnabled = false 
 local fovRadius = 180
 local showFovCircle = true
 local fovCircle = nil
@@ -82,6 +88,7 @@ local function patchWeapons()
                                 local success, receiver = pcall(require, child)
                                 if success and receiver and receiver.Config and receiver.Config.Tune then
                                     local tune = receiver.Config.Tune
+                                    
                                     if patchOptions.recoil then
                                         tune.Recoil_X = 0 
                                         tune.Recoil_Z = 0 
@@ -89,11 +96,14 @@ local function patchWeapons()
                                         tune.RecoilForce_Impulse = 0 
                                         tune.Recoil_Range = Vector2.zero
                                         tune.Recoil_Camera = 0 
-                                        tune.RecoilAccelDamp_Crouch = Vector3.new(1, 1, 1)
-                                        tune.RecoilAccelDamp_Prone = Vector3.new(1, 1, 1)
                                     end
+                                    
                                     if patchOptions.firemodes then 
                                         tune.Firemodes = {3, 2, 1, 0} 
+                                    end
+
+                                    if patchOptions.rapidFire then
+                                        tune.RoF = patchOptions.rpmValue
                                     end
                                 end
                             end)
@@ -131,7 +141,7 @@ local function getClosestNPC()
     return closestNPC
 end
 
--- === CÁC HOOKS CỦA GAME (SILENT AIM & ANTI DAMAGE / FALL) ===
+-- === CÁC HOOKS CỦA GAME ===
 task.spawn(function()
     pcall(function()
         -- 1. Hook Weapon / Recoil
@@ -162,40 +172,39 @@ task.spawn(function()
             end)
         end
         
-        -- 2. Hook Anti Damage / Anti Fall qua Namecall
+        -- 2. Hook Camera (No Bob)
+        local characterCamera = filtergc('table', {Name = "CharacterCamera"}, true)
+        if characterCamera and characterCamera.Update then
+            local oldCamUpdate; oldCamUpdate = hookfunction(characterCamera.Update, function(...)
+                local args = {...}
+                if noBobEnabled and args[1] then
+                    args[1]._shakes = {}
+                    args[1]._bob = 0
+                end
+                return oldCamUpdate(unpack(args))
+            end)
+        end
+        
+        -- 3. Hook Namecall (Anti Damage)
         local OldNamecall
         OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
             local Method = getnamecallmethod()
-            local Args = {...}
-
             if antiDamageEnabled then
-                -- Chặn các lệnh TakeDamage local
                 if tostring(Method) == "TakeDamage" then 
-                    return nil 
+                    return nil
                 end
-                
-                -- Chặn RemoteEvent gây sát thương (Ví dụ FallDamage)
-                if Method == "FireServer" then
-                    local remoteName = tostring(Self)
-                    -- Danh sách các remote phổ biến gây sát thương rơi hoặc sát thương chung
-                    if remoteName:find("Damage") or remoteName:find("Fall") or remoteName:find("Health") then
-                        return nil
-                    end
+                if Method == "FireServer" and tostring(Self):find("Damage") then
+                    return nil
                 end
             end
             return OldNamecall(Self, ...)
         end)
 
-        -- 3. Bypass Fall Damage vật lý (Nếu game tính sát thương dựa trên vận tốc rơi)
         RunService.Heartbeat:Connect(function()
             if antiDamageEnabled and localPlayer.Character then
                 local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
-                if root and humanoid then
-                    -- Nếu đang rơi quá nhanh, giảm vận tốc Y để không bị chết khi chạm đất
-                    if root.AssemblyLinearVelocity.Y < -50 then
-                        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
-                    end
+                if root and root.AssemblyLinearVelocity.Y < -60 then
+                    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
                 end
             end
         end)
@@ -307,8 +316,8 @@ CharacterTab:CreateButton({
     Name = "Fly & Walkspeed (Coming Soon)",
     Callback = function()
         Rayfield:Notify({
-            Title = "comesooon!!!!!!!!!!!!",
-            Content = "!soon or im eat you!",
+            Title = "Thông báo",
+            Content = "Tính năng sẽ sớm ra mắt!",
             Duration = 3,
             Image = 4483362458,
         })
@@ -319,7 +328,7 @@ local FovTab = Window:CreateTab("FOV Settings ⭕")
 FovTab:CreateToggle({ Name = "Show FOV Circle", CurrentValue = true, Callback = function(v) showFovCircle = v end })
 FovTab:CreateSlider({ Name = "FOV Radius", Range = {0, 500}, Increment = 1, CurrentValue = 180, Callback = function(v) fovRadius = v end })
 
-local VisibleTab = Window:CreateTab("Visible ")
+local VisibleTab = Window:CreateTab("Visible 👁️")
 VisibleTab:CreateToggle({
    Name = "ESP NPC (Sphere)",
    CurrentValue = false,
@@ -340,7 +349,14 @@ VisibleTab:CreateToggle({
         for model, _ in pairs(activeNPCs) do applyOutline(model) end
     end
 })
-VisibleTab:CreateToggle({ Name = "npc Scan (😱)", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
+VisibleTab:CreateToggle({
+    Name = "No Bob (Camera)",
+    CurrentValue = false,
+    Callback = function(v)
+        noBobEnabled = v
+    end
+})
+VisibleTab:CreateToggle({ Name = "NPC Scan (😱)", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
 VisibleTab:CreateToggle({
     Name = "Remove NVG Interface",
     CurrentValue = false,
@@ -373,9 +389,31 @@ VisibleTab:CreateToggle({
 VisibleTab:CreateToggle({ Name = "FullBright", CurrentValue = false, Callback = function(v) fullBrightEnabled = v end })
 VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = function(v) alwaysDayEnabled = v end })
 
-local WeaponsTab = Window:CreateTab("Weapons ")
+local WeaponsTab = Window:CreateTab("Weapons 🔫")
 WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
 WeaponsTab:CreateToggle({ Name = "Unlock Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
+
+WeaponsTab:CreateToggle({
+    Name = "Rapid Fire",
+    CurrentValue = false,
+    Callback = function(v)
+        patchOptions.rapidFire = v
+        patchWeapons()
+    end
+}):ToolTip("Trang bị lại vũ khí để áp dụng/hủy bỏ")
+
+WeaponsTab:CreateSlider({
+    Name = "Round Per Minute",
+    Range = {1, 1000},
+    Increment = 1,
+    CurrentValue = 1000,
+    Callback = function(v)
+        patchOptions.rpmValue = v
+        if patchOptions.rapidFire then
+            patchWeapons()
+        end
+    end
+})
 
 task.spawn(function()
     while not isUnloaded do
