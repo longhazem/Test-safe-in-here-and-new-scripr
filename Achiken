@@ -16,6 +16,7 @@ local camera = Workspace.CurrentCamera
 local centerPosition = camera.ViewportSize / 2
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
+-- === BIẾN CỦA BẠN (GIỮ NGUYÊN) ===
 local hitboxSize = 20 
 local activeNPCs = {}      
 local trackedParts = {}    
@@ -24,7 +25,7 @@ local wallConnections = {}
 
 local wallEnabled = false       
 local outlineEnabled = false    
-local silentEnabled = false     
+local silentEnabled = false -- Đây là Silent Hitbox     
 local showHitbox = false        
 local fullBrightEnabled = false 
 local alwaysDayEnabled = false
@@ -36,10 +37,10 @@ local patchOptions = {
     recoil = false, 
     firemodes = false,
     rapidFire = false,
-    rpmValue = 1000
+    rpmValue = 1000 -- Biến quan trọng cho RPM
 }
 
-local silentAimEnabled = false
+local silentAimEnabled = false -- Đây là Slice Aim (Hook)
 local antiDamageEnabled = false 
 local fovRadius = 180
 local showFovCircle = true
@@ -50,28 +51,18 @@ local zombieColor = Color3.fromRGB(255, 0, 0)
 local hitboxVisualColor = Color3.fromRGB(255, 0, 0) 
 local noFogConnection = nil
 
--- === HỆ THỐNG ÂM THANH NÂNG CẤP ===
+-- === HỆ THỐNG ÂM THANH (GIỮ NGUYÊN) ===
 local activeLoopingSounds = {}
 
 local function playSound(soundId, isLoop)
-    -- Nếu đang loop âm thanh này rồi thì không tạo thêm
     if isLoop and activeLoopingSounds[soundId] then return end
-
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://" .. tostring(soundId)
     sound.Parent = SoundService
     sound.Volume = 1
     sound.Looped = isLoop or false
-    
     sound:Play()
-    
-    if isLoop then
-        activeLoopingSounds[soundId] = sound
-    else
-        sound.Ended:Connect(function()
-            sound:Destroy()
-        end)
-    end
+    if isLoop then activeLoopingSounds[soundId] = sound else sound.Ended:Connect(function() sound:Destroy() end) end
     return sound
 end
 
@@ -88,7 +79,6 @@ local function clearNVG(gui)
         gui:Destroy()
     end
 end
-
 playerGui.ChildAdded:Connect(clearNVG)
 
 pcall(function()
@@ -103,41 +93,28 @@ pcall(function()
     end
 end)
 
+-- === VŨ KHÍ (PATCH TỪ TUNE) ===
 local function patchWeapons()
     pcall(function()
-        local weaponsFolder = RS:FindFirstChild("Shared")
-            and RS.Shared:FindFirstChild("Configs")
-            and RS.Shared.Configs:FindFirstChild("Weapon")
-            and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
-        
+        local weaponsFolder = RS:FindFirstChild("Shared") and RS.Shared:FindFirstChild("Configs") and RS.Shared.Configs:FindFirstChild("Weapon") and RS.Shared.Configs.Weapon:FindFirstChild("Weapons_Player")
         if not weaponsFolder then return end
-
         for _, platform in pairs(weaponsFolder:GetChildren()) do
-            if platform.Name:match("^Platform_") then
-                for _, weapon in pairs(platform:GetChildren()) do
-                    for _, child in pairs(weapon:GetChildren()) do
-                        if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
-                            task.spawn(function()
-                                local success, receiver = pcall(require, child)
-                                if success and receiver and receiver.Config and receiver.Config.Tune then
-                                    local tune = receiver.Config.Tune
-                                    if patchOptions.recoil then
-                                        tune.Recoil_X = 0 
-                                        tune.Recoil_Z = 0 
-                                        tune.RecoilForce_Tap = 0
-                                        tune.RecoilForce_Impulse = 0 
-                                        tune.Recoil_Range = Vector2.zero
-                                        tune.Recoil_Camera = 0 
-                                    end
-                                    if patchOptions.firemodes then 
-                                        tune.Firemodes = {3, 2, 1, 0} 
-                                    end
-                                    if patchOptions.rapidFire then
-                                        tune.RoF = patchOptions.rpmValue
-                                    end
+            for _, weapon in pairs(platform:GetChildren()) do
+                for _, child in pairs(weapon:GetChildren()) do
+                    if child:IsA("ModuleScript") and child.Name:match("^Receiver%.") then
+                        task.spawn(function()
+                            local success, receiver = pcall(require, child)
+                            if success and receiver and receiver.Config and receiver.Config.Tune then
+                                local tune = receiver.Config.Tune
+                                if patchOptions.recoil then
+                                    tune.Recoil_X, tune.Recoil_Z = 0, 0
+                                    tune.RecoilForce_Tap, tune.RecoilForce_Impulse = 0, 0
+                                    tune.Recoil_Range, tune.Recoil_Camera = Vector2.zero, 0
                                 end
-                            end)
-                        end
+                                if patchOptions.firemodes then tune.Firemodes = {3, 2, 1, 0} end
+                                if patchOptions.rapidFire then tune.RoF = patchOptions.rpmValue end
+                            end
+                        end)
                     end
                 end
             end
@@ -145,6 +122,7 @@ local function patchWeapons()
     end)
 end
 
+-- === LOGIC SLICE AIM & VISIBILITY ===
 local function isVisible(targetModel)
     if not targetModel or not targetModel:FindFirstChild("Head") then return false end
     local ignoreList = {localPlayer.Character, targetModel}
@@ -158,7 +136,7 @@ local function getClosestNPC()
         if model.Parent and data.head then
             local pos, onScreen = camera:WorldToViewportPoint(data.head.Position)
             if onScreen then
-                local distance = (Vector2.new(pos.X, pos.Y) - centerPosition).Magnitude
+                local distance = (Vector2.new(pos.X, pos.Y) - (camera.ViewportSize/2)).Magnitude
                 if distance <= fovRadius and distance < closestDistance then
                     if isVisible(model) then
                         closestNPC = model
@@ -171,11 +149,12 @@ local function getClosestNPC()
     return closestNPC
 end
 
--- === CÁC HOOKS CỦA GAME ===
+-- === CÁC HOOKS CỦA GAME (SLICE AIM & NO BOB) ===
 task.spawn(function()
     pcall(function()
         local getMuzzle = filtergc('function', {Name = 'GetMuzzleCFrame'}, true)
         local getRecoil = filtergc('function', {Name = 'getRecoil'}, true)
+        local characterCamera = filtergc('table', {Name = "CharacterCamera"}, true)
 
         if getMuzzle then
             local oldMuzzle; oldMuzzle = hookfunction(getMuzzle, function(self, cast)
@@ -193,57 +172,36 @@ task.spawn(function()
         if getRecoil then
             local oldRecoil; oldRecoil = hookfunction(getRecoil, function(...)
                 local args = {...}
-                if silentAimEnabled and args[1] then
+                if silentAimEnabled and args[1] then 
                     args[1]['Barrel_Spread'] = 0
-                    args[1]['RecoilForce_Tap'] = 0
+                    args[1]['RecoilForce_Tap'] = 0 
                 end
                 return oldRecoil(unpack(args))
             end)
         end
         
-        local characterCamera = filtergc('table', {Name = "CharacterCamera"}, true)
         if characterCamera and characterCamera.Update then
             local oldCamUpdate; oldCamUpdate = hookfunction(characterCamera.Update, function(...)
                 local args = {...}
-                if noBobEnabled and args[1] then
-                    args[1]._shakes = {}
-                    args[1]._bob = 0
-                end
+                if noBobEnabled and args[1] then args[1]._shakes = {} args[1]._bob = 0 end
                 return oldCamUpdate(unpack(args))
             end)
         end
         
-        local OldNamecall
-        OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
+        local OldNamecall; OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
             local Method = getnamecallmethod()
-            if antiDamageEnabled then
-                if tostring(Method) == "TakeDamage" then 
-                    return nil
-                end
-                if Method == "FireServer" and tostring(Self):find("Damage") then
-                    return nil
-                end
-            end
+            if antiDamageEnabled and (tostring(Method) == "TakeDamage" or (Method == "FireServer" and tostring(Self):find("Damage"))) then return nil end
             return OldNamecall(Self, ...)
-        end)
-
-        RunService.Heartbeat:Connect(function()
-            if antiDamageEnabled and localPlayer.Character then
-                local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if root and root.AssemblyLinearVelocity.Y < -60 then
-                    root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
-                end
-            end
         end)
     end)
 end)
 
+-- === NPC HANDLING (GIỮ NGUYÊN isValidNPC) ===
 local function isValidNPC(model)
     if not model or not model.Parent then return false end
     local name = model.Name:lower()
     local isZombie = string.find(name, "zombie") ~= nil
-    local isMale = (model.Name == "Male")
-    if isMale then
+    if model.Name == "Male" then
         for _, c in ipairs(model:GetChildren()) do
             if c.Name:sub(1, 3) == "AI_" then return true end
         end
@@ -252,26 +210,21 @@ local function isValidNPC(model)
 end
 
 local function applyOutline(model)
-    pcall(function()
-        local highlight = model:FindFirstChild("ESP_Outline")
-        if outlineEnabled and isValidNPC(model) then
-            if not highlight then
-                highlight = Instance.new("Highlight")
-                highlight.Name = "ESP_Outline"
-                highlight.Parent = model
-            end
-            highlight.FillTransparency = 1
-            highlight.OutlineColor = string.find(model.Name:lower(), "zombie") and zombieColor or maleColor
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        else
-            if highlight then highlight:Destroy() end
+    local highlight = model:FindFirstChild("ESP_Outline")
+    if outlineEnabled and isValidNPC(model) then
+        if not highlight then
+            highlight = Instance.new("Highlight", model)
+            highlight.Name = "ESP_Outline"
         end
-    end)
+        highlight.FillTransparency = 1
+        highlight.OutlineColor = string.find(model.Name:lower(), "zombie") and zombieColor or maleColor
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    elseif highlight then highlight:Destroy() end
 end
 
 local function createBoxForPart(part)
     if not part or part:FindFirstChild("Wall_Box") then return end
-    local sphere = Instance.new("SphereHandleAdornment")
+    local sphere = Instance.new("SphereHandleAdornment", part)
     sphere.Name = "Wall_Box"
     sphere.Radius = 1.2
     sphere.Adornee = part
@@ -279,10 +232,7 @@ local function createBoxForPart(part)
     sphere.ZIndex = 10
     sphere.Transparency = 0.3
     local model = part.Parent
-    if model then
-        sphere.Color3 = string.find(model.Name:lower(), "zombie") and zombieColor or maleColor
-    end
-    sphere.Parent = part
+    sphere.Color3 = (model and string.find(model.Name:lower(), "zombie")) and zombieColor or maleColor
     trackedParts[part] = true
 end
 
@@ -297,66 +247,44 @@ local function addNPC(model)
     end
 end
 
+-- === SILENT HITBOX LOGIC ===
 local function applySilentHitbox(model, root)
     if not originalSizes[model] then originalSizes[model] = root.Size end
     local TARGET_SIZE = Vector3.new(hitboxSize, hitboxSize, hitboxSize)
     if root.Size ~= TARGET_SIZE then root.Size = TARGET_SIZE end
     root.Transparency = showHitbox and 0.8 or 1
-    if showHitbox then 
-        root.Color = hitboxVisualColor 
-        root.Material = Enum.Material.Neon 
-    end
+    if showHitbox then root.Color = hitboxVisualColor root.Material = Enum.Material.Neon end
     root.CanCollide = true
 end
 
 local function restoreOriginalSize(model)
     local root = model:FindFirstChild("Root") or model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("UpperTorso")
-    if root and originalSizes[model] then
-        root.Size = originalSizes[model]
-        root.Transparency = 1
-    end
+    if root and originalSizes[model] then root.Size = originalSizes[model] root.Transparency = 1 end
     originalSizes[model] = nil
 end
 
+-- === UI RAYFIELD (RE-BUILT VỚI ĐỦ SLIDER) ===
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({ 
-    Name = "⚔️🐧 Tokai Hub vietnams❤️ (Universal)", 
+    Name = "⚔️🐧 Tokai Hub (FIXED LOGIC)", 
     LoadingTitle = "Executor: " .. identifyexecutor(),
     Theme = "bytokaivipproVN🇯🇵" 
 })
 
 local CombatTab = Window:CreateTab("Combat ⚔️")
-CombatTab:CreateToggle({ Name = "Silent Aim (Hook)", CurrentValue = false, Callback = function(v) silentAimEnabled = v end })
+CombatTab:CreateToggle({ Name = "Slice Aim (Hook)", CurrentValue = false, Callback = function(v) silentAimEnabled = v end })
 CombatTab:CreateToggle({ Name = "Silent Hitbox", CurrentValue = false, Callback = function(v) silentEnabled = v end })
 CombatTab:CreateToggle({ Name = "Show Hitbox Visual", CurrentValue = false, Callback = function(v) showHitbox = v end })
-CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, CurrentValue = 20, Callback = function(v) hitboxSize = v end })
+CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {2, 60}, Increment = 1, CurrentValue = 20, Callback = function(v) hitboxSize = v end })
 
 local CharacterTab = Window:CreateTab("Character 👤")
 CharacterTab:CreateToggle({ 
-    Name = "Anti Fall / Anti Damage dont on it", 
+    Name = "Anti Fall / Anti Damage", 
     CurrentValue = false, 
     Callback = function(v) 
         antiDamageEnabled = v 
-        local soundID = 139836635302855
-        if v then
-            playSound(soundID, true) -- Bật là kêu luôn và lặp lại
-        else
-            stopSound(soundID) -- Tắt là dừng luôn
-        end
+        if v then playSound(139836635302855, true) else stopSound(139836635302855) end
     end 
-})
-
-CharacterTab:CreateButton({
-    Name = "Fly & Walkspeed dont click (Coming Soon)",
-    Callback = function()
-        playSound(109033035962147)
-        Rayfield:Notify({
-            Title = "why you click",
-            Content = "aishiteru This will be added soon. ",
-            Duration = 3,
-            Image = 4483362458,
-        })
-    end,
 })
 
 local FovTab = Window:CreateTab("FOV Settings ⭕")
@@ -364,80 +292,41 @@ FovTab:CreateToggle({ Name = "Show FOV Circle", CurrentValue = true, Callback = 
 FovTab:CreateSlider({ Name = "FOV Radius", Range = {0, 500}, Increment = 1, CurrentValue = 180, Callback = function(v) fovRadius = v end })
 
 local VisibleTab = Window:CreateTab("Visible 👁️")
-VisibleTab:CreateToggle({
-   Name = "ESP NPC (Sphere)",
-   CurrentValue = false,
-   Callback = function(v) 
-       wallEnabled = v
-       if v then for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
-       else 
-           for part, _ in pairs(trackedParts) do if part:FindFirstChild("Wall_Box") then part.Wall_Box:Destroy() end end
-           trackedParts = {}
-       end 
-   end,
-})
-VisibleTab:CreateToggle({
-    Name = "ESP NPC (Outline Only)",
-    CurrentValue = false,
-    Callback = function(v)
-        outlineEnabled = v
-        for model, _ in pairs(activeNPCs) do applyOutline(model) end
-    end
-})
-VisibleTab:CreateToggle({ Name = "No Bob no worrk  (Camera)", CurrentValue = false, Callback = function(v) noBobEnabled = v end })
+VisibleTab:CreateToggle({ Name = "ESP NPC (Sphere)", CurrentValue = false, Callback = function(v) 
+    wallEnabled = v
+    if v then for _, d in pairs(activeNPCs) do createBoxForPart(d.head) end 
+    else for part, _ in pairs(trackedParts) do if part:FindFirstChild("Wall_Box") then part.Wall_Box:Destroy() end end trackedParts = {} end 
+end })
+VisibleTab:CreateToggle({ Name = "ESP NPC (Outline Only)", CurrentValue = false, Callback = function(v) outlineEnabled = v for model, _ in pairs(activeNPCs) do applyOutline(model) end end })
+VisibleTab:CreateToggle({ Name = "No Bob (Camera)", CurrentValue = false, Callback = function(v) noBobEnabled = v end })
 VisibleTab:CreateToggle({ Name = "NPC Scan", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
-VisibleTab:CreateToggle({
-    Name = "Remove NVG Interface",
-    CurrentValue = false,
-    Callback = function(v)
-        nvgEnabled = v
-        if v then for _, gui in ipairs(playerGui:GetChildren()) do clearNVG(gui) end end
-    end
-})
-VisibleTab:CreateToggle({
-   Name = "No Fog",
-   CurrentValue = false,
-   Callback = function(v) 
-        local atm = lighting:FindFirstChildOfClass("Atmosphere")
-        if v then
-            if atm then 
-                noFogConnection = atm:GetPropertyChangedSignal("Density"):Connect(function() atm.Density = 0 end)
-                atm.Density = 0 
-            end
-            lighting.FogEnd = 100000
-        else
-            if noFogConnection then noFogConnection:Disconnect() end
-            if atm then atm.Density = 0.3 end
-        end
-   end,
-})
+VisibleTab:CreateToggle({ Name = "Remove NVG Interface", CurrentValue = false, Callback = function(v) nvgEnabled = v if v then for _, gui in ipairs(playerGui:GetChildren()) do clearNVG(gui) end end end })
+VisibleTab:CreateToggle({ Name = "No Fog", CurrentValue = false, Callback = function(v) 
+    local atm = lighting:FindFirstChildOfClass("Atmosphere")
+    if v then if atm then noFogConnection = atm:GetPropertyChangedSignal("Density"):Connect(function() atm.Density = 0 end) atm.Density = 0 end lighting.FogEnd = 100000
+    else if noFogConnection then noFogConnection:Disconnect() end if atm then atm.Density = 0.3 end end
+end })
 VisibleTab:CreateToggle({ Name = "FullBright", CurrentValue = false, Callback = function(v) fullBrightEnabled = v end })
 VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = function(v) alwaysDayEnabled = v end })
 
 local WeaponsTab = Window:CreateTab("Weapons 🔫")
 WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
 WeaponsTab:CreateToggle({ Name = "Unlock Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
-WeaponsTab:CreateToggle({ Name = "Rapid Fire unknown work", CurrentValue = false, Callback = function(v) patchOptions.rapidFire = v patchWeapons() end })
+WeaponsTab:CreateToggle({ Name = "Rapid Fire", CurrentValue = false, Callback = function(v) patchOptions.rapidFire = v patchWeapons() end })
+WeaponsTab:CreateSlider({ Name = "RPM Value", Range = {100, 3000}, Increment = 50, CurrentValue = 1000, Callback = function(v) patchOptions.rpmValue = v patchWeapons() end })
 
+-- === LOOPS ===
 task.spawn(function()
     while not isUnloaded do
+        if fastScanEnabled then
+            for _, m in ipairs(Workspace:GetDescendants()) do if m:IsA("Model") and isValidNPC(m) then addNPC(m) end end
+        end
         for model, data in pairs(activeNPCs) do
-            if not model.Parent then activeNPCs[model] = nil end
+            if not model.Parent then activeNPCs[model] = nil continue end
+            if silentEnabled and data.root then applySilentHitbox(model, data.root) 
+            else restoreOriginalSize(model) end
         end
         task.wait(0.5)
-    end
-end)
-
-task.spawn(function()
-    while not isUnloaded do
-        if silentEnabled then
-            for model, data in pairs(activeNPCs) do
-                if model.Parent and data.root then applySilentHitbox(model, data.root) end
-            end
-        else
-            for model, _ in pairs(originalSizes) do restoreOriginalSize(model) end
-        end
-        task.wait(0.1)
     end
 end)
 
@@ -447,13 +336,21 @@ RunService.RenderStepped:Connect(function()
         fovCircle.Position = camera.ViewportSize / 2
         fovCircle.Radius = fovRadius
     end
-    if fullBrightEnabled then
-        lighting.Brightness = 2
-        lighting.Ambient = Color3.new(1, 1, 1)
-        lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-    end
+    if fullBrightEnabled then lighting.Brightness = 2 lighting.Ambient = Color3.new(1, 1, 1) lighting.OutdoorAmbient = Color3.new(1, 1, 1) end
     if alwaysDayEnabled then lighting.ClockTime = 12 end
 end)
 
+RunService.Heartbeat:Connect(function()
+    if antiDamageEnabled and localPlayer.Character then
+        local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root and root.AssemblyLinearVelocity.Y < -60 then
+            root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
+        end
+    end
+end)
+
+-- Initial Scan
 for _, m in ipairs(Workspace:GetDescendants()) do if m:IsA("Model") and isValidNPC(m) then addNPC(m) end end
 Workspace.DescendantAdded:Connect(function(m) if m:IsA("Model") then task.delay(0.1, function() if isValidNPC(m) then addNPC(m) end end) end end)
+
+Rayfield:Notify({Title = "TOKAI HUB", Content = "Đã tích hợp đầy đủ Slice Aim & RPM Slider!", Duration = 5})
