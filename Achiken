@@ -333,7 +333,7 @@ CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, C
 
 local CharacterTab = Window:CreateTab("Character 👤")
 CharacterTab:CreateToggle({ 
-    Name = "Anti Fall / Anti Damage", 
+    Name = "Anti Fall / Anti Damage dont on it", 
     CurrentValue = false, 
     Callback = function(v) 
         antiDamageEnabled = v 
@@ -347,12 +347,12 @@ CharacterTab:CreateToggle({
 })
 
 CharacterTab:CreateButton({
-    Name = "Fly & Walkspeed (Coming Soon)",
+    Name = "Fly & Walkspeed dont click (Coming Soon)",
     Callback = function()
         playSound(109033035962147)
         Rayfield:Notify({
-            Title = "Thông báo",
-            Content = "Tính năng sắp ra mắt!",
+            Title = "why you click",
+            Content = "aishiteru This will be added soon. ",
             Duration = 3,
             Image = 4483362458,
         })
@@ -384,7 +384,7 @@ VisibleTab:CreateToggle({
         for model, _ in pairs(activeNPCs) do applyOutline(model) end
     end
 })
-VisibleTab:CreateToggle({ Name = "No Bob (Camera)", CurrentValue = false, Callback = function(v) noBobEnabled = v end })
+VisibleTab:CreateToggle({ Name = "No Bob no worrk  (Camera)", CurrentValue = false, Callback = function(v) noBobEnabled = v end })
 VisibleTab:CreateToggle({ Name = "NPC Scan", CurrentValue = false, Callback = function(v) fastScanEnabled = v end })
 VisibleTab:CreateToggle({
     Name = "Remove NVG Interface",
@@ -417,7 +417,7 @@ VisibleTab:CreateToggle({ Name = "Always Day", CurrentValue = false, Callback = 
 local WeaponsTab = Window:CreateTab("Weapons 🔫")
 WeaponsTab:CreateToggle({ Name = "No Recoil", CurrentValue = false, Callback = function(v) patchOptions.recoil = v patchWeapons() end })
 WeaponsTab:CreateToggle({ Name = "Unlock Firemodes", CurrentValue = false, Callback = function(v) patchOptions.firemodes = v patchWeapons() end })
-WeaponsTab:CreateToggle({ Name = "Rapid Fire", CurrentValue = false, Callback = function(v) patchOptions.rapidFire = v patchWeapons() end })
+WeaponsTab:CreateToggle({ Name = "Rapid Fire unknown work", CurrentValue = false, Callback = function(v) patchOptions.rapidFire = v patchWeapons() end })
 
 task.spawn(function()
     while not isUnloaded do
