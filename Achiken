@@ -131,7 +131,7 @@ local function getClosestNPC()
     return closestNPC
 end
 
--- === CÁC HOOKS CỦA GAME (SILENT AIM & ANTI DAMAGE) ===
+-- === CÁC HOOKS CỦA GAME (SILENT AIM & ANTI DAMAGE / FALL) ===
 task.spawn(function()
     pcall(function()
         -- 1. Hook Weapon / Recoil
@@ -162,16 +162,42 @@ task.spawn(function()
             end)
         end
         
-        -- 2. Hook Anti Damage / Anti Fall
+        -- 2. Hook Anti Damage / Anti Fall qua Namecall
         local OldNamecall
         OldNamecall = hookmetamethod(game, "__namecall", function(Self, ...)
             local Method = getnamecallmethod()
+            local Args = {...}
+
             if antiDamageEnabled then
+                -- Chặn các lệnh TakeDamage local
                 if tostring(Method) == "TakeDamage" then 
-                    return -- Hủy lệnh nhận sát thương
+                    return nil 
+                end
+                
+                -- Chặn RemoteEvent gây sát thương (Ví dụ FallDamage)
+                if Method == "FireServer" then
+                    local remoteName = tostring(Self)
+                    -- Danh sách các remote phổ biến gây sát thương rơi hoặc sát thương chung
+                    if remoteName:find("Damage") or remoteName:find("Fall") or remoteName:find("Health") then
+                        return nil
+                    end
                 end
             end
             return OldNamecall(Self, ...)
+        end)
+
+        -- 3. Bypass Fall Damage vật lý (Nếu game tính sát thương dựa trên vận tốc rơi)
+        RunService.Heartbeat:Connect(function()
+            if antiDamageEnabled and localPlayer.Character then
+                local root = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
+                if root and humanoid then
+                    -- Nếu đang rơi quá nhanh, giảm vận tốc Y để không bị chết khi chạm đất
+                    if root.AssemblyLinearVelocity.Y < -50 then
+                        root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, -20, root.AssemblyLinearVelocity.Z)
+                    end
+                end
+            end
         end)
     end)
 end)
@@ -270,9 +296,8 @@ CombatTab:CreateToggle({ Name = "Show Hitbox Visual", CurrentValue = false, Call
 CombatTab:CreateSlider({ Name = "Hitbox Size", Range = {0, 20}, Increment = 1, CurrentValue = 20, Callback = function(v) hitboxSize = v end })
 
 local CharacterTab = Window:CreateTab("Character 👤")
--- Nút chuyển đổi Anti Fall / Anti Damage
 CharacterTab:CreateToggle({ 
-    Name = "Anti Fall / Anti Damage (Miss)", 
+    Name = "Anti Fall / Anti Damage", 
     CurrentValue = false, 
     Callback = function(v) 
         antiDamageEnabled = v 
