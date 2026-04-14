@@ -150,32 +150,34 @@ function Library:CreateWindow()
 
         local elements = {}
         
-        -- Hàm tạo nút Discord đặc biệt
+        -- Hàm tạo nút Discord với chữ DISCORD
         function elements:AddDiscordButton(inviteLink)
             local btn = Instance.new("TextButton", page)
             btn.Name = "DiscordButton"
             btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242) -- Màu xanh Discord
             btn.BackgroundTransparency = 0.2
-            btn.Text = "" -- Xóa text để chèn icon
+            btn.Text = "DISCORD"
+            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Font = Enum.Font.GothamBold
+            btn.TextScaled = true
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
             
-            local icon = Instance.new("ImageLabel", btn)
-            icon.Size = UDim2.new(0.8, 0, 0.8, 0)
-            icon.Position = UDim2.new(0.5, 0, 0.5, 0)
-            icon.AnchorPoint = Vector2.new(0.5, 0.5)
-            icon.BackgroundTransparency = 1
-            icon.Image = "rbxassetid://13503281434" -- ID icon Discord
-            
-            local aspect = Instance.new("UIAspectRatioConstraint", icon)
-            aspect.AspectRatio = 1
+            -- Thêm padding để chữ không bị dính sát viền
+            local uipadding = Instance.new("UIPadding", btn)
+            uipadding.PaddingTop = UDim.new(0.25, 0)
+            uipadding.PaddingBottom = UDim.new(0.25, 0)
 
             btn.MouseButton1Click:Connect(function()
                 if setclipboard then
                     setclipboard(inviteLink)
-                    -- Hiệu ứng đổi màu nhẹ khi nhấn
+                    -- Hiệu ứng phản hồi khi nhấn
+                    btn.Text = "COPIED!"
                     btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                    task.wait(0.2)
+                    btn.TextColor3 = Color3.fromRGB(88, 101, 242)
+                    task.wait(0.5)
+                    btn.Text = "DISCORD"
                     btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+                    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
                 end
             end)
         end
@@ -224,7 +226,7 @@ end
 local win = Library:CreateWindow()
 local mainTab = win:CreateTab("Home", "H")
 
--- Nút Discord mới thay cho nút Fix Avatar cũ
+-- Nút Discord hiển thị chữ DISCORD
 mainTab:AddDiscordButton("https://discord.gg/nn783R2fK2")
 
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
