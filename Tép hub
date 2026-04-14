@@ -43,7 +43,7 @@ function Library:CreateWindow()
     mainStroke.Thickness = 2
     mainStroke.Transparency = 0.5
 
-    -- PHẦN PROFILE (LEFT)
+    -- PROFILE SECTION
     local profileFrame = Instance.new("Frame", main)
     profileFrame.Size = UDim2.new(0.45, 0, 0.45, 0)
     profileFrame.Position = UDim2.new(0.04, 0, 0.06, 0)
@@ -51,22 +51,19 @@ function Library:CreateWindow()
     profileFrame.BackgroundTransparency = 0.6
     Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.1, 0)
 
-    -- SỬA LỖI HÌNH NHÂN VẬT TẠI ĐÂY
     local pfp = Instance.new("ImageLabel", profileFrame)
     pfp.Name = "UserAvatar"
-    pfp.Size = UDim2.new(0.4, 0, 0.8, 0) -- Kích thước tương đối
+    pfp.Size = UDim2.new(0.4, 0, 0.8, 0)
     pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
-    pfp.AnchorPoint = Vector2.new(0, 0.5) -- Căn giữa dọc
+    pfp.AnchorPoint = Vector2.new(0, 0.5)
     pfp.BackgroundTransparency = 1
     pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
     
-    -- Giữ tỉ lệ 1:1 để không bị méo mặt
     local pfpAspect = Instance.new("UIAspectRatioConstraint", pfp)
     pfpAspect.AspectRatio = 1
-    pfpAspect.AspectType = Enum.AspectType.ScaleWithParentSize
 
     local pfpCorner = Instance.new("UICorner", pfp)
-    pfpCorner.CornerRadius = UDim.new(1, 0) -- Hình tròn tuyệt đối
+    pfpCorner.CornerRadius = UDim.new(1, 0)
 
     local welcomeMsg = Instance.new("TextLabel", profileFrame)
     welcomeMsg.Size = UDim2.new(0.5, 0, 0.8, 0)
@@ -79,7 +76,7 @@ function Library:CreateWindow()
     welcomeMsg.TextScaled = true
     welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- PHẦN ABOUT (RIGHT)
+    -- ABOUT SECTION
     local aboutFrame = Instance.new("Frame", main)
     aboutFrame.Size = UDim2.new(0.4, 0, 0.45, 0)
     aboutFrame.Position = UDim2.new(0.55, 0, 0.06, 0)
@@ -135,8 +132,6 @@ function Library:CreateWindow()
 
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
-        
-        -- Giữ nút tab luôn tròn dù màn hình thay đổi
         local btnAspect = Instance.new("UIAspectRatioConstraint", tabBtn)
         btnAspect.AspectRatio = 1
 
@@ -154,6 +149,37 @@ function Library:CreateWindow()
         end)
 
         local elements = {}
+        
+        -- Hàm tạo nút Discord đặc biệt
+        function elements:AddDiscordButton(inviteLink)
+            local btn = Instance.new("TextButton", page)
+            btn.Name = "DiscordButton"
+            btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242) -- Màu xanh Discord
+            btn.BackgroundTransparency = 0.2
+            btn.Text = "" -- Xóa text để chèn icon
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
+            
+            local icon = Instance.new("ImageLabel", btn)
+            icon.Size = UDim2.new(0.8, 0, 0.8, 0)
+            icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+            icon.AnchorPoint = Vector2.new(0.5, 0.5)
+            icon.BackgroundTransparency = 1
+            icon.Image = "rbxassetid://13503281434" -- ID icon Discord
+            
+            local aspect = Instance.new("UIAspectRatioConstraint", icon)
+            aspect.AspectRatio = 1
+
+            btn.MouseButton1Click:Connect(function()
+                if setclipboard then
+                    setclipboard(inviteLink)
+                    -- Hiệu ứng đổi màu nhẹ khi nhấn
+                    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    task.wait(0.2)
+                    btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+                end
+            end)
+        end
+
         function elements:AddButton(text, callback)
             local btn = Instance.new("TextButton", page)
             btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -170,7 +196,7 @@ function Library:CreateWindow()
             uipadding.PaddingBottom = UDim.new(0.2, 0)
         end
         
-        if #sidebar:GetChildren() == 3 then page.Visible = true end -- Sửa lỗi logic check tab đầu
+        if #sidebar:GetChildren() == 3 then page.Visible = true end
         return elements
     end
 
@@ -194,7 +220,11 @@ function Library:CreateWindow()
     return Library
 end
 
+-- SỬ DỤNG:
 local win = Library:CreateWindow()
 local mainTab = win:CreateTab("Home", "H")
-mainTab:AddButton("Fix Avatar Success!", function() end)
+
+-- Nút Discord mới thay cho nút Fix Avatar cũ
+mainTab:AddDiscordButton("https://discord.gg/nn783R2fK2")
+
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
