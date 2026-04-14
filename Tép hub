@@ -17,29 +17,26 @@ function Library:CreateWindow()
     screenGui.Name = "TOKAIHUB"
     screenGui.Parent = (gethui and gethui()) or game.CoreGui
     screenGui.ResetOnSpawn = false
-    screenGui.IgnoreGuiInset = true -- Để UI không bị lệch bởi thanh hệ thống Roblox
+    screenGui.IgnoreGuiInset = true
 
-    -- Cấu hình màu sắc
     local MainColor = Color3.fromRGB(255, 192, 203)
     local TextColor = Color3.fromRGB(100, 50, 60)
 
-    -- KHUNG CHÍNH (Sử dụng Scale để tương thích mọi màn hình)
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
-    main.Size = UDim2.new(0.5, 0, 0.6, 0) -- Chiếm 50% rộng, 60% cao màn hình
+    main.Size = UDim2.new(0.5, 0, 0.6, 0)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = MainColor
     main.BackgroundTransparency = 0.2
     main.Parent = screenGui
     
-    -- Giới hạn kích thước tối thiểu và tối đa (tránh quá to trên PC hoặc quá nhỏ trên Mobile)
     local uiSizeConstraint = Instance.new("UISizeConstraint", main)
     uiSizeConstraint.MaxSize = Vector2.new(650, 420)
     uiSizeConstraint.MinSize = Vector2.new(360, 240)
 
     local mainCorner = Instance.new("UICorner", main)
-    mainCorner.CornerRadius = UDim.new(0.05, 0) -- Bo góc theo tỉ lệ
+    mainCorner.CornerRadius = UDim.new(0.05, 0)
 
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -54,22 +51,32 @@ function Library:CreateWindow()
     profileFrame.BackgroundTransparency = 0.6
     Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.1, 0)
 
+    -- SỬA LỖI HÌNH NHÂN VẬT TẠI ĐÂY
     local pfp = Instance.new("ImageLabel", profileFrame)
-    pfp.Size = UDim2.new(0.35, 0, 0.7, 0)
-    pfp.Position = UDim2.new(0.05, 0, 0.15, 0)
-    pfp.SizeConstraint = Enum.SizeConstraint.RelativeYY -- Giữ ảnh luôn vuông
+    pfp.Name = "UserAvatar"
+    pfp.Size = UDim2.new(0.4, 0, 0.8, 0) -- Kích thước tương đối
+    pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
+    pfp.AnchorPoint = Vector2.new(0, 0.5) -- Căn giữa dọc
+    pfp.BackgroundTransparency = 1
     pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-    pfp.BackgroundColor3 = MainColor
-    Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
+    
+    -- Giữ tỉ lệ 1:1 để không bị méo mặt
+    local pfpAspect = Instance.new("UIAspectRatioConstraint", pfp)
+    pfpAspect.AspectRatio = 1
+    pfpAspect.AspectType = Enum.AspectType.ScaleWithParentSize
+
+    local pfpCorner = Instance.new("UICorner", pfp)
+    pfpCorner.CornerRadius = UDim.new(1, 0) -- Hình tròn tuyệt đối
 
     local welcomeMsg = Instance.new("TextLabel", profileFrame)
-    welcomeMsg.Size = UDim2.new(0.55, 0, 0.9, 0)
-    welcomeMsg.Position = UDim2.new(0.4, 0, 0.05, 0)
+    welcomeMsg.Size = UDim2.new(0.5, 0, 0.8, 0)
+    welcomeMsg.Position = UDim2.new(0.45, 0, 0.5, 0)
+    welcomeMsg.AnchorPoint = Vector2.new(0, 0.5)
     welcomeMsg.BackgroundTransparency = 1
     welcomeMsg.Text = "Welcome,\n" .. Players.LocalPlayer.DisplayName .. "!"
     welcomeMsg.TextColor3 = TextColor
     welcomeMsg.Font = Enum.Font.GothamBold
-    welcomeMsg.TextScaled = true -- Tự động chỉnh cỡ chữ theo khung
+    welcomeMsg.TextScaled = true
     welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
 
     -- PHẦN ABOUT (RIGHT)
@@ -82,7 +89,8 @@ function Library:CreateWindow()
 
     local aboutText = Instance.new("TextLabel", aboutFrame)
     aboutText.Size = UDim2.new(0.9, 0, 0.8, 0)
-    aboutText.Position = UDim2.new(0.05, 0, 0.1, 0)
+    aboutText.Position = UDim2.new(0.5, 0, 0.5, 0)
+    aboutText.AnchorPoint = Vector2.new(0.5, 0.5)
     aboutText.BackgroundTransparency = 1
     aboutText.Text = "TOKAI HUB\nMobile Support: 100%\nResolution: 360p+"
     aboutText.TextColor3 = TextColor
@@ -90,7 +98,7 @@ function Library:CreateWindow()
     aboutText.TextScaled = true
     aboutText.TextWrapped = true
 
-    -- SIDEBAR (Điều hướng)
+    -- SIDEBAR
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0.1, 0, 0.8, 0)
     sidebar.Position = UDim2.new(1.02, 0, 0.1, 0)
@@ -103,7 +111,7 @@ function Library:CreateWindow()
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- TAB CONTAINER (Nơi chứa các nút chức năng)
+    -- TAB CONTAINER
     local tabContainer = Instance.new("Frame", main)
     tabContainer.Size = UDim2.new(0.92, 0, 0.4, 0)
     tabContainer.Position = UDim2.new(0.04, 0, 0.55, 0)
@@ -122,12 +130,16 @@ function Library:CreateWindow()
         page.ScrollBarImageColor3 = TextColor
 
         local layout = Instance.new("UIGridLayout", page)
-        layout.CellSize = UDim2.new(0.48, 0, 0, 40) -- 2 cột nút
+        layout.CellSize = UDim2.new(0.48, 0, 0, 40)
         layout.CellPadding = UDim2.new(0.02, 0, 0.05, 0)
 
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
-        tabBtn.SizeConstraint = Enum.SizeConstraint.RelativeXX -- Luôn tròn
+        
+        -- Giữ nút tab luôn tròn dù màn hình thay đổi
+        local btnAspect = Instance.new("UIAspectRatioConstraint", tabBtn)
+        btnAspect.AspectRatio = 1
+
         tabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         tabBtn.BackgroundTransparency = 0.8
         tabBtn.Text = iconText or name:sub(1,1)
@@ -153,17 +165,16 @@ function Library:CreateWindow()
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
             btn.MouseButton1Click:Connect(callback)
             
-            -- Padding cho chữ không bị sát viền
             local uipadding = Instance.new("UIPadding", btn)
             uipadding.PaddingTop = UDim.new(0.2, 0)
             uipadding.PaddingBottom = UDim.new(0.2, 0)
         end
         
-        if #sidebar:GetChildren() == 2 then page.Visible = true end
+        if #sidebar:GetChildren() == 3 then page.Visible = true end -- Sửa lỗi logic check tab đầu
         return elements
     end
 
-    -- Kéo thả hỗ trợ cả Touch (Mobile)
+    -- Kéo thả
     local dragging, dragStart, startPos
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -183,8 +194,7 @@ function Library:CreateWindow()
     return Library
 end
 
--- Cách sử dụng
 local win = Library:CreateWindow()
 local mainTab = win:CreateTab("Home", "H")
-mainTab:AddButton("Test Mobile 1", function() print("Ok!") end)
+mainTab:AddButton("Fix Avatar Success!", function() end)
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
