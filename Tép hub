@@ -17,100 +17,96 @@ function Library:CreateWindow()
     screenGui.Name = "TOKAIHUB"
     screenGui.Parent = (gethui and gethui()) or game.CoreGui
     screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true -- Để UI không bị lệch bởi thanh hệ thống Roblox
 
-    -- Cấu hình màu sắc theo ảnh (Hồng Glassmorphism)
-    local MainColor = Color3.fromRGB(255, 192, 203) -- Màu hồng chủ đạo
-    local DarkPink = Color3.fromRGB(230, 150, 170)
-    local TextColor = Color3.fromRGB(100, 50, 60) -- Màu chữ đậm cho dễ đọc trên nền hồng
+    -- Cấu hình màu sắc
+    local MainColor = Color3.fromRGB(255, 192, 203)
+    local TextColor = Color3.fromRGB(100, 50, 60)
 
+    -- KHUNG CHÍNH (Sử dụng Scale để tương thích mọi màn hình)
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
-    main.Size = UDim2.new(0, 650, 0, 420)
+    main.Size = UDim2.new(0.5, 0, 0.6, 0) -- Chiếm 50% rộng, 60% cao màn hình
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = MainColor
     main.BackgroundTransparency = 0.2
     main.Parent = screenGui
     
-    local mainCorner = Instance.new("UICorner", main)
-    mainCorner.CornerRadius = UDim.new(0, 30) -- Bo góc cực mạnh như ảnh
+    -- Giới hạn kích thước tối thiểu và tối đa (tránh quá to trên PC hoặc quá nhỏ trên Mobile)
+    local uiSizeConstraint = Instance.new("UISizeConstraint", main)
+    uiSizeConstraint.MaxSize = Vector2.new(650, 420)
+    uiSizeConstraint.MinSize = Vector2.new(360, 240)
 
-    -- Hiệu ứng Glass (Viền trắng mỏng)
+    local mainCorner = Instance.new("UICorner", main)
+    mainCorner.CornerRadius = UDim.new(0.05, 0) -- Bo góc theo tỉ lệ
+
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Color = Color3.fromRGB(255, 255, 255)
-    mainStroke.Thickness = 2.5
+    mainStroke.Thickness = 2
     mainStroke.Transparency = 0.5
 
-    -- Background Pattern (Lớp phủ mờ)
-    local pattern = Instance.new("Frame", main)
-    pattern.Size = UDim2.new(1, 0, 1, 0)
-    pattern.BackgroundTransparency = 0.8
-    pattern.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Instance.new("UICorner", pattern).CornerRadius = UDim.new(0, 30)
-
-    -- LEFT SECTION: Profile & Welcome
+    -- PHẦN PROFILE (LEFT)
     local profileFrame = Instance.new("Frame", main)
-    profileFrame.Size = UDim2.new(0, 300, 0, 180)
-    profileFrame.Position = UDim2.new(0, 25, 0, 25)
+    profileFrame.Size = UDim2.new(0.45, 0, 0.45, 0)
+    profileFrame.Position = UDim2.new(0.04, 0, 0.06, 0)
     profileFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     profileFrame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0, 20)
+    Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.1, 0)
 
     local pfp = Instance.new("ImageLabel", profileFrame)
-    pfp.Size = UDim2.new(0, 100, 0, 100)
-    pfp.Position = UDim2.new(0, 15, 0.5, -50)
+    pfp.Size = UDim2.new(0.35, 0, 0.7, 0)
+    pfp.Position = UDim2.new(0.05, 0, 0.15, 0)
+    pfp.SizeConstraint = Enum.SizeConstraint.RelativeYY -- Giữ ảnh luôn vuông
     pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
     pfp.BackgroundColor3 = MainColor
     Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
 
     local welcomeMsg = Instance.new("TextLabel", profileFrame)
-    welcomeMsg.Size = UDim2.new(1, -130, 1, 0)
-    welcomeMsg.Position = UDim2.new(0, 125, 0, 0)
+    welcomeMsg.Size = UDim2.new(0.55, 0, 0.9, 0)
+    welcomeMsg.Position = UDim2.new(0.4, 0, 0.05, 0)
     welcomeMsg.BackgroundTransparency = 1
-    welcomeMsg.Text = "The lanterns light your way~,\n" .. Players.LocalPlayer.DisplayName .. "!\n\nWelcome to Tokai Hub"
+    welcomeMsg.Text = "Welcome,\n" .. Players.LocalPlayer.DisplayName .. "!"
     welcomeMsg.TextColor3 = TextColor
     welcomeMsg.Font = Enum.Font.GothamBold
-    welcomeMsg.TextSize = 16
-    welcomeMsg.TextWrapped = true
+    welcomeMsg.TextScaled = true -- Tự động chỉnh cỡ chữ theo khung
     welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- RIGHT SECTION: About
+    -- PHẦN ABOUT (RIGHT)
     local aboutFrame = Instance.new("Frame", main)
-    aboutFrame.Size = UDim2.new(0, 250, 0, 180)
-    aboutFrame.Position = UDim2.new(1, -275, 0, 25)
+    aboutFrame.Size = UDim2.new(0.4, 0, 0.45, 0)
+    aboutFrame.Position = UDim2.new(0.55, 0, 0.06, 0)
     aboutFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     aboutFrame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0, 20)
+    Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0.1, 0)
 
     local aboutText = Instance.new("TextLabel", aboutFrame)
-    aboutText.Size = UDim2.new(1, -20, 1, -20)
-    aboutText.Position = UDim2.new(0, 10, 0, 10)
+    aboutText.Size = UDim2.new(0.9, 0, 0.8, 0)
+    aboutText.Position = UDim2.new(0.05, 0, 0.1, 0)
     aboutText.BackgroundTransparency = 1
-    aboutText.Text = "Tokai Hub is a specialized Roblox development project.\n\nCreated by LONGTOKAI.\nEnjoy the experience!"
+    aboutText.Text = "TOKAI HUB\nMobile Support: 100%\nResolution: 360p+"
     aboutText.TextColor3 = TextColor
     aboutText.Font = Enum.Font.Gotham
-    aboutText.TextSize = 13
+    aboutText.TextScaled = true
     aboutText.TextWrapped = true
-    aboutText.TextYAlignment = Enum.TextYAlignment.Top
 
-    -- SIDEBAR (Thanh điều hướng bên phải)
+    -- SIDEBAR (Điều hướng)
     local sidebar = Instance.new("Frame", main)
-    sidebar.Size = UDim2.new(0, 50, 0, 320)
-    sidebar.Position = UDim2.new(1, 60, 0.5, -160)
+    sidebar.Size = UDim2.new(0.1, 0, 0.8, 0)
+    sidebar.Position = UDim2.new(1.02, 0, 0.1, 0)
     sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     sidebar.BackgroundTransparency = 0.5
-    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 25)
-    Instance.new("UIStroke", sidebar).Color = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0.3, 0)
 
     local sideLayout = Instance.new("UIListLayout", sidebar)
-    sideLayout.Padding = UDim.new(0, 15)
+    sideLayout.Padding = UDim.new(0.05, 0)
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Tab Container
+    -- TAB CONTAINER (Nơi chứa các nút chức năng)
     local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(1, -50, 0, 160)
-    tabContainer.Position = UDim2.new(0, 25, 1, -185)
+    tabContainer.Size = UDim2.new(0.92, 0, 0.4, 0)
+    tabContainer.Position = UDim2.new(0.04, 0, 0.55, 0)
     tabContainer.BackgroundTransparency = 1
 
     local pages = Instance.new("Frame", tabContainer)
@@ -122,25 +118,27 @@ function Library:CreateWindow()
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.Visible = false
-        page.ScrollBarThickness = 0
+        page.ScrollBarThickness = 2
+        page.ScrollBarImageColor3 = TextColor
+
         local layout = Instance.new("UIGridLayout", page)
-        layout.CellSize = UDim2.new(0, 185, 0, 45)
-        layout.CellPadding = UDim2.new(0, 10, 0, 10)
+        layout.CellSize = UDim2.new(0.48, 0, 0, 40) -- 2 cột nút
+        layout.CellPadding = UDim2.new(0.02, 0, 0.05, 0)
 
         local tabBtn = Instance.new("TextButton", sidebar)
-        tabBtn.Size = UDim2.new(0, 35, 0, 35)
+        tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
+        tabBtn.SizeConstraint = Enum.SizeConstraint.RelativeXX -- Luôn tròn
         tabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         tabBtn.BackgroundTransparency = 0.8
         tabBtn.Text = iconText or name:sub(1,1)
+        tabBtn.TextScaled = true
         tabBtn.Font = Enum.Font.GothamBold
         tabBtn.TextColor3 = TextColor
-        tabBtn.TextSize = 18
         Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
 
         tabBtn.MouseButton1Click:Connect(function()
             for _, v in pairs(pages:GetChildren()) do v.Visible = false end
             page.Visible = true
-            TweenService:Create(tabBtn, TweenInfo.new(0.3), {BackgroundTransparency = 0.2}):Play()
         end)
 
         local elements = {}
@@ -151,35 +149,35 @@ function Library:CreateWindow()
             btn.Text = text
             btn.Font = Enum.Font.GothamSemibold
             btn.TextColor3 = TextColor
-            btn.TextSize = 14
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
+            btn.TextScaled = true
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
             btn.MouseButton1Click:Connect(callback)
+            
+            -- Padding cho chữ không bị sát viền
+            local uipadding = Instance.new("UIPadding", btn)
+            uipadding.PaddingTop = UDim.new(0.2, 0)
+            uipadding.PaddingBottom = UDim.new(0.2, 0)
         end
         
-        -- Mặc định mở tab đầu tiên
-        if #sidebar:GetChildren() == 2 then -- 1 layout + 1 btn
-            page.Visible = true
-            tabBtn.BackgroundTransparency = 0.2
-        end
-
+        if #sidebar:GetChildren() == 2 then page.Visible = true end
         return elements
     end
 
-    -- Kéo thả (Draggable)
+    -- Kéo thả hỗ trợ cả Touch (Mobile)
     local dragging, dragStart, startPos
     main.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true; dragStart = input.Position; startPos = main.Position
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
             main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
     end)
 
     return Library
@@ -188,8 +186,5 @@ end
 -- Cách sử dụng
 local win = Library:CreateWindow()
 local mainTab = win:CreateTab("Home", "H")
-mainTab:AddButton("Test Script 1", function() print("Clicked!") end)
+mainTab:AddButton("Test Mobile 1", function() print("Ok!") end)
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
-
-local settingTab = win:CreateTab("Settings", "S")
-settingTab:AddButton("Reset Config", function() end)
