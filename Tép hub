@@ -10,17 +10,15 @@ local function CleanupOldUI()
 end
 CleanupOldUI()
 
--- Hệ thống âm thanh nối tiếp
+-- Hệ thống âm thanh
 local function PlayIntroSounds()
     local s1 = Instance.new("Sound", SoundService)
     s1.SoundId = "rbxassetid://87585111317596"
     s1.Volume = 1
-    
     local s2 = Instance.new("Sound", SoundService)
     s2.SoundId = "rbxassetid://88375863598461"
     s2.Volume = 0.5
     s2.Looped = true
-
     s1:Play()
     s1.Ended:Wait()
     s2:Play()
@@ -36,46 +34,42 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
-    local MainColor = Color3.fromRGB(255, 192, 203) -- Màu hồng nhạt
-    local TextColor = Color3.fromRGB(100, 50, 60)
-    local AccentColor = Color3.fromRGB(255, 140, 160)
+    local MainColor = Color3.fromRGB(255, 170, 190)
+    local TextColor = Color3.fromRGB(80, 40, 50)
+    local DarkPink = Color3.fromRGB(220, 100, 130)
 
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
-    main.Size = UDim2.new(0.55, 0, 0.65, 0)
+    main.Size = UDim2.new(0, 720, 0, 440)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = MainColor
-    main.BackgroundTransparency = 0.2
+    main.BackgroundTransparency = 0.25
     main.Parent = screenGui
     
-    local uiSizeConstraint = Instance.new("UISizeConstraint", main)
-    uiSizeConstraint.MaxSize = Vector2.new(750, 480)
-    uiSizeConstraint.MinSize = Vector2.new(400, 300)
-
-    Instance.new("UICorner", main).CornerRadius = UDim.new(0.05, 0)
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 20)
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Color = Color3.fromRGB(255, 255, 255)
     mainStroke.Thickness = 2
-    mainStroke.Transparency = 0.5
+    mainStroke.Transparency = 0.6
 
-    -- SIDEBAR
+    -- SIDEBAR (RIGHT)
     local sidebar = Instance.new("Frame", main)
-    sidebar.Size = UDim2.new(0.08, 0, 0.8, 0)
-    sidebar.Position = UDim2.new(0.91, 0, 0.1, 0)
+    sidebar.Size = UDim2.new(0, 55, 0, 360)
+    sidebar.Position = UDim2.new(1, -65, 0.5, -180)
     sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    sidebar.BackgroundTransparency = 0.5
-    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0.5, 0)
+    sidebar.BackgroundTransparency = 0.6
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(1, 0)
 
     local sideLayout = Instance.new("UIListLayout", sidebar)
-    sideLayout.Padding = UDim.new(0.03, 0)
+    sideLayout.Padding = UDim.new(0, 15)
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
     -- TAB CONTAINER
     local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0.85, 0, 0.9, 0)
-    tabContainer.Position = UDim2.new(0.03, 0, 0.05, 0)
+    tabContainer.Size = UDim2.new(0, 620, 0, 390)
+    tabContainer.Position = UDim2.new(0, 20, 0, 25)
     tabContainer.BackgroundTransparency = 1
 
     local pages = Instance.new("Frame", tabContainer)
@@ -97,14 +91,13 @@ function Library:CreateWindow()
         layout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
 
         local tabBtn = Instance.new("TextButton", sidebar)
-        tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
-        Instance.new("UIAspectRatioConstraint", tabBtn).AspectRatio = 1
-        tabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        tabBtn.BackgroundTransparency = 0.8
+        tabBtn.Size = UDim2.new(0, 40, 0, 40)
+        tabBtn.BackgroundColor3 = DarkPink
+        tabBtn.BackgroundTransparency = 0.2
         tabBtn.Text = iconText or name:sub(1,1)
         tabBtn.TextScaled = true
         tabBtn.Font = Enum.Font.GothamBold
-        tabBtn.TextColor3 = TextColor
+        tabBtn.TextColor3 = Color3.new(1,1,1)
         Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
 
         tabBtn.MouseButton1Click:Connect(function()
@@ -114,95 +107,134 @@ function Library:CreateWindow()
 
         local elements = {}
 
-        -- --- PHẦN GIAO DIỆN HOME GIỐNG ẢNH ---
+        -- --- HÀM HOME DASHBOARD ---
         function elements:AddDashboard()
-            layout:Destroy() -- Xóa Grid layout để tự do sắp xếp
+            layout:Destroy() 
             
-            -- Khung User (Trái Trên)
-            local userFrame = Instance.new("Frame", page)
-            userFrame.Size = UDim2.new(0.58, 0, 0.48, 0)
-            userFrame.Position = UDim2.new(0, 0, 0, 0)
-            userFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            userFrame.BackgroundTransparency = 0.5
-            Instance.new("UICorner", userFrame).CornerRadius = UDim.new(0.1, 0)
+            local function CreateBox(size, pos, titleText)
+                local box = Instance.new("Frame", page)
+                box.Size = size
+                box.Position = pos
+                box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                box.BackgroundTransparency = 0.5
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 15)
+                
+                if titleText then
+                    local label = Instance.new("TextLabel", box)
+                    label.Size = UDim2.new(0, 25, 1, 0)
+                    label.Position = UDim2.new(1, -25, 0, 0)
+                    label.Text = titleText
+                    label.Font = Enum.Font.GothamBold
+                    label.TextColor3 = DarkPink
+                    label.TextSize = 10
+                    label.TextWrapped = true
+                    label.BackgroundTransparency = 1
+                    label.Rotation = 0 -- Chữ dọc kiểu Nhật/Ảnh
+                end
+                return box
+            end
 
-            local pfp = Instance.new("ImageLabel", userFrame)
-            pfp.Size = UDim2.new(0.4, 0, 0.8, 0)
-            pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
-            pfp.AnchorPoint = Vector2.new(0, 0.5)
+            -- 1. USER BOX (Top Left)
+            local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0))
+            local pfp = Instance.new("ImageLabel", userBox)
+            pfp.Size = UDim2.new(0, 120, 0, 120)
+            pfp.Position = UDim2.new(0, 15, 0.5, -60)
             pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-            pfp.BackgroundTransparency = 1
-            Instance.new("UIAspectRatioConstraint", pfp)
+            pfp.BackgroundColor3 = DarkPink
+            pfp.BackgroundTransparency = 0.3
             Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
 
-            local welcome = Instance.new("TextLabel", userFrame)
-            welcome.Size = UDim2.new(0.5, 0, 0.4, 0)
-            welcome.Position = UDim2.new(0.45, 0, 0.3, 0)
-            welcome.Text = "The lanterns light your way~, \n" .. Players.LocalPlayer.DisplayName .. "!"
-            welcome.Font = Enum.Font.GothamBold
-            welcome.TextColor3 = TextColor
-            welcome.TextScaled = true
-            welcome.BackgroundTransparency = 1
-            welcome.TextXAlignment = Enum.TextXAlignment.Left
+            local greet = Instance.new("TextLabel", userBox)
+            greet.Size = UDim2.new(0.5, 0, 0.5, 0)
+            greet.Position = UDim2.new(0, 150, 0.2, 0)
+            greet.Text = "The lanterns light your way~,\n" .. Players.LocalPlayer.DisplayName .. "!"
+            greet.Font = Enum.Font.GothamBold
+            greet.TextColor3 = TextColor
+            greet.TextSize = 18
+            greet.TextXAlignment = "Left"
+            greet.BackgroundTransparency = 1
 
-            -- Khung About (Phải Trên)
-            local aboutFrame = Instance.new("Frame", page)
-            aboutFrame.Size = UDim2.new(0.38, 0, 0.48, 0)
-            aboutFrame.Position = UDim2.new(0.62, 0, 0, 0)
-            aboutFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            aboutFrame.BackgroundTransparency = 0.5
-            Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0.1, 0)
+            local dots = Instance.new("TextLabel", userBox)
+            dots.Position = UDim2.new(0.5, 0, 0.9, -10)
+            dots.Text = "● ○ ○"
+            dots.TextColor3 = DarkPink
+            dots.BackgroundTransparency = 1
 
-            local aboutTitle = Instance.new("TextLabel", aboutFrame)
-            aboutTitle.Size = UDim2.new(1, 0, 0.2, 0)
-            aboutTitle.Text = "About"
-            aboutTitle.Font = Enum.Font.GothamBold
-            aboutTitle.TextColor3 = TextColor
-            aboutTitle.BackgroundTransparency = 1
+            -- 2. ABOUT BOX (Top Right)
+            local aboutBox = CreateBox(UDim2.new(0.37, 0, 0.47, 0), UDim2.new(0.63, 0, 0, 0), "A\nB\nO\nU\nT")
+            local aboutDesc = Instance.new("TextLabel", aboutBox)
+            aboutDesc.Size = UDim2.new(0.8, 0, 0.7, 0)
+            aboutDesc.Position = UDim2.new(0.05, 0, 0.15, 0)
+            aboutDesc.Text = "Yae Miko is the head shrine maiden of the Grand Narukami Shrine and the owner of the Yae Publishing House."
+            aboutDesc.Font = Enum.Font.Gotham
+            aboutDesc.TextColor3 = TextColor
+            aboutDesc.TextSize = 13
+            aboutDesc.TextWrapped = true
+            aboutDesc.TextXAlignment = "Left"
+            aboutDesc.BackgroundTransparency = 1
+
+            -- 3. MUSIC BOX (Bottom Left)
+            local musicBox = CreateBox(UDim2.new(0.35, 0, 0.47, 0), UDim2.new(0, 0, 0.53, 0), "M\nU\nS\nI\nC")
+            local runningText = Instance.new("TextLabel", musicBox)
+            runningText.Text = "Running"
+            runningText.Size = UDim2.new(1,0,0.2,0)
+            runningText.TextColor3 = DarkPink
+            runningText.BackgroundTransparency = 1
             
-            local aboutInfo = Instance.new("TextLabel", aboutFrame)
-            aboutInfo.Size = UDim2.new(0.9, 0, 0.7, 0)
-            aboutInfo.Position = UDim2.new(0.05, 0, 0.25, 0)
-            aboutInfo.Text = "TOKAI HUB là hệ thống script hỗ trợ đa nền tảng, tập trung vào trải nghiệm người dùng tối ưu nhất."
-            aboutInfo.Font = Enum.Font.Gotham
-            aboutInfo.TextColor3 = TextColor
-            aboutInfo.TextScaled = true
-            aboutInfo.BackgroundTransparency = 1
-            aboutInfo.TextWrapped = true
+            local visualizer = Instance.new("TextLabel", musicBox)
+            visualizer.Size = UDim2.new(1, 0, 0.5, 0)
+            visualizer.Position = UDim2.new(0, 0, 0.4, 0)
+            visualizer.Text = "●●●●●●●●●●●●●"
+            visualizer.TextColor3 = DarkPink
+            visualizer.BackgroundTransparency = 1
 
-            -- Khung Status/Time (Dưới)
-            local statusFrame = Instance.new("Frame", page)
-            statusFrame.Size = UDim2.new(1, 0, 0.48, 0)
-            statusFrame.Position = UDim2.new(0, 0, 0.52, 0)
-            statusFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            statusFrame.BackgroundTransparency = 0.5
-            Instance.new("UICorner", statusFrame).CornerRadius = UDim.new(0.1, 0)
-
-            local timeLabel = Instance.new("TextLabel", statusFrame)
-            timeLabel.Size = UDim2.new(0.4, 0, 0.5, 0)
-            timeLabel.Position = UDim2.new(0.05, 0, 0.2, 0)
+            -- 4. STATUS/TIME BOX (Bottom Right)
+            local statBox = CreateBox(UDim2.new(0.62, 0, 0.47, 0), UDim2.new(0.38, 0, 0.53, 0), "S\nT\nA\nT\nU\nS")
+            
+            local timeLabel = Instance.new("TextLabel", statBox)
+            timeLabel.Size = UDim2.new(0, 150, 0, 50)
+            timeLabel.Position = UDim2.new(0, 15, 0, 10)
             timeLabel.Font = Enum.Font.GothamBold
+            timeLabel.TextSize = 35
             timeLabel.TextColor3 = TextColor
-            timeLabel.TextScaled = true
             timeLabel.BackgroundTransparency = 1
 
-            -- Cập nhật thời gian thực
+            local dateLabel = Instance.new("TextLabel", statBox)
+            dateLabel.Position = UDim2.new(1, -150, 0, 20)
+            dateLabel.Text = os.date("%A, %B %d")
+            dateLabel.TextColor3 = DarkPink
+            dateLabel.BackgroundTransparency = 1
+
+            -- Stats Row
+            local statsRow = Instance.new("Frame", statBox)
+            statsRow.Size = UDim2.new(0.9, 0, 0.3, 0)
+            statsRow.Position = UDim2.new(0, 15, 0, 65)
+            statsRow.BackgroundTransparency = 1
+            local statsLayout = Instance.new("UIListLayout", statsRow)
+            statsLayout.FillDirection = "Horizontal"
+            statsLayout.Padding = UDim.new(0, 8)
+
+            local function AddStat(txt)
+                local s = Instance.new("TextLabel", statsRow)
+                s.Size = UDim2.new(0, 65, 1, 0)
+                s.BackgroundColor3 = Color3.new(1,1,1)
+                s.BackgroundTransparency = 0.5
+                s.Text = txt
+                s.TextSize = 10
+                s.Font = Enum.Font.GothamBold
+                s.TextColor3 = TextColor
+                Instance.new("UICorner", s).CornerRadius = UDim.new(0, 5)
+            end
+            AddStat("Exec: 4")
+            AddStat("Up: 20m")
+            AddStat("Sess: 9s")
+            AddStat("Via: Tokai")
+
             task.spawn(function()
                 while task.wait(1) do
-                    local t = os.date("*t")
-                    timeLabel.Text = string.format("%02d:%02d:%02d", t.hour, t.min, t.sec)
+                    timeLabel.Text = os.date("%H:%M:%S")
                 end
             end)
-
-            local infoLabel = Instance.new("TextLabel", statusFrame)
-            infoLabel.Size = UDim2.new(0.5, 0, 0.4, 0)
-            infoLabel.Position = UDim2.new(0.45, 0, 0.25, 0)
-            infoLabel.Text = "Status: Running\nVersion: 1.0.0\nExecutor: Premium"
-            infoLabel.Font = Enum.Font.GothamSemibold
-            infoLabel.TextColor3 = TextColor
-            infoLabel.TextScaled = true
-            infoLabel.BackgroundTransparency = 1
-            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
         end
         
         function elements:AddButton(text, callback)
@@ -212,8 +244,8 @@ function Library:CreateWindow()
             btn.Text = text
             btn.Font = Enum.Font.GothamSemibold
             btn.TextColor3 = TextColor
-            btn.TextScaled = true
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
+            btn.TextSize = 14
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
             btn.MouseButton1Click:Connect(callback)
         end
         
@@ -221,7 +253,7 @@ function Library:CreateWindow()
         return elements
     end
 
-    -- Kéo thả
+    -- Kéo thả (Draggable)
     local dragging, dragStart, startPos
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -241,17 +273,14 @@ function Library:CreateWindow()
     return Library
 end
 
--- --- THỰC THI ---
+-- --- TEST ---
 local win = Library:CreateWindow()
-
--- 1. Tab Home (Giao diện Dashboard giống ảnh)
 local homeTab = win:CreateTab("Home", "H")
 homeTab:AddDashboard()
 
--- 2. Tab Main
-local mainTab = win:CreateTab("Main", "M")
+local mainTab = win:CreateTab("Script", "S")
 mainTab:AddButton("Auto Farm", function() print("Farm") end)
+mainTab:AddButton("Kill Aura", function() print("Kill") end)
 
--- 3. Tab Setting
-local settingTab = win:CreateTab("Setting", "S")
-settingTab:AddButton("Destroy UI", function() CleanupOldUI() end)
+local settingTab = win:CreateTab("Setting", "G")
+settingTab:AddButton("Destroy UI", CleanupOldUI)
