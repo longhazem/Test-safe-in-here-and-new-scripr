@@ -22,8 +22,8 @@ local function PlayIntroSounds()
     s2.Looped = true
 
     s1:Play()
-    s1.Ended:Wait() -- Chờ âm thanh 1 xong
-    s2:Play()       -- Phát âm thanh 2
+    s1.Ended:Wait()
+    s2:Play()
 end
 task.spawn(PlayIntroSounds)
 
@@ -52,67 +52,13 @@ function Library:CreateWindow()
     uiSizeConstraint.MaxSize = Vector2.new(650, 420)
     uiSizeConstraint.MinSize = Vector2.new(360, 240)
 
-    local mainCorner = Instance.new("UICorner", main)
-    mainCorner.CornerRadius = UDim.new(0.05, 0)
-
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0.05, 0)
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Color = Color3.fromRGB(255, 255, 255)
     mainStroke.Thickness = 2
     mainStroke.Transparency = 0.5
 
-    -- PROFILE SECTION
-    local profileFrame = Instance.new("Frame", main)
-    profileFrame.Size = UDim2.new(0.45, 0, 0.45, 0)
-    profileFrame.Position = UDim2.new(0.04, 0, 0.06, 0)
-    profileFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    profileFrame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.1, 0)
-
-    local pfp = Instance.new("ImageLabel", profileFrame)
-    pfp.Name = "UserAvatar"
-    pfp.Size = UDim2.new(0.4, 0, 0.8, 0)
-    pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
-    pfp.AnchorPoint = Vector2.new(0, 0.5)
-    pfp.BackgroundTransparency = 1
-    pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-    
-    local pfpAspect = Instance.new("UIAspectRatioConstraint", pfp)
-    pfpAspect.AspectRatio = 1
-
-    local pfpCorner = Instance.new("UICorner", pfp)
-    pfpCorner.CornerRadius = UDim.new(1, 0)
-
-    local welcomeMsg = Instance.new("TextLabel", profileFrame)
-    welcomeMsg.Size = UDim2.new(0.5, 0, 0.8, 0)
-    welcomeMsg.Position = UDim2.new(0.45, 0, 0.5, 0)
-    welcomeMsg.AnchorPoint = Vector2.new(0, 0.5)
-    welcomeMsg.BackgroundTransparency = 1
-    welcomeMsg.Text = "Welcome,\n" .. Players.LocalPlayer.DisplayName .. "!"
-    welcomeMsg.TextColor3 = TextColor
-    welcomeMsg.Font = Enum.Font.GothamBold
-    welcomeMsg.TextScaled = true
-    welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- ABOUT SECTION
-    local aboutFrame = Instance.new("Frame", main)
-    aboutFrame.Size = UDim2.new(0.4, 0, 0.45, 0)
-    aboutFrame.Position = UDim2.new(0.55, 0, 0.06, 0)
-    aboutFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    aboutFrame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0.1, 0)
-
-    local aboutText = Instance.new("TextLabel", aboutFrame)
-    aboutText.Size = UDim2.new(0.9, 0, 0.8, 0)
-    aboutText.Position = UDim2.new(0.5, 0, 0.5, 0)
-    aboutText.AnchorPoint = Vector2.new(0.5, 0.5)
-    aboutText.BackgroundTransparency = 1
-    aboutText.Text = "TOKAI HUB\nMobile Support: 100%\nResolution: 360p+"
-    aboutText.TextColor3 = TextColor
-    aboutText.Font = Enum.Font.Gotham
-    aboutText.TextScaled = true
-    aboutText.TextWrapped = true
-
-    -- SIDEBAR
+    -- SIDEBAR (Thanh điều hướng bên phải)
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0.1, 0, 0.8, 0)
     sidebar.Position = UDim2.new(1.02, 0, 0.1, 0)
@@ -125,10 +71,10 @@ function Library:CreateWindow()
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- TAB CONTAINER
+    -- TAB CONTAINER (Đã mở rộng lên toàn bộ Frame chính)
     local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0.92, 0, 0.4, 0)
-    tabContainer.Position = UDim2.new(0.04, 0, 0.55, 0)
+    tabContainer.Size = UDim2.new(0.92, 0, 0.9, 0) -- Chiếm 90% chiều cao để rộng rãi
+    tabContainer.Position = UDim2.new(0.04, 0, 0.05, 0)
     tabContainer.BackgroundTransparency = 1
 
     local pages = Instance.new("Frame", tabContainer)
@@ -137,23 +83,22 @@ function Library:CreateWindow()
 
     function Library:CreateTab(name, iconText)
         local page = Instance.new("ScrollingFrame", pages)
+        page.Name = name .. "Page"
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.Visible = false
         page.ScrollBarThickness = 2
         page.ScrollBarImageColor3 = TextColor
         page.CanvasSize = UDim2.new(0, 0, 0, 0)
-        page.AutomaticCanvasSize = Enum.AutomaticSize.Y -- Giúp cuộn nếu nhiều nút
+        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
         local layout = Instance.new("UIGridLayout", page)
-        layout.CellSize = UDim2.new(0.48, 0, 0, 40)
-        layout.CellPadding = UDim2.new(0.02, 0, 0.05, 0)
+        layout.CellSize = UDim2.new(0.48, 0, 0, 45)
+        layout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
 
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
-        local btnAspect = Instance.new("UIAspectRatioConstraint", tabBtn)
-        btnAspect.AspectRatio = 1
-
+        Instance.new("UIAspectRatioConstraint", tabBtn).AspectRatio = 1
         tabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         tabBtn.BackgroundTransparency = 0.8
         tabBtn.Text = iconText or name:sub(1,1)
@@ -168,29 +113,72 @@ function Library:CreateWindow()
         end)
 
         local elements = {}
+
+        -- Hàm đặc biệt dành riêng cho Home Tab
+        function elements:AddHomeProfile()
+            layout:Destroy() -- Home dùng layout tự do, không dùng Grid
+            
+            local profileFrame = Instance.new("Frame", page)
+            profileFrame.Size = UDim2.new(1, 0, 0.45, 0)
+            profileFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            profileFrame.BackgroundTransparency = 0.6
+            Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.05, 0)
+
+            local pfp = Instance.new("ImageLabel", profileFrame)
+            pfp.Size = UDim2.new(0.3, 0, 0.8, 0)
+            pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
+            pfp.AnchorPoint = Vector2.new(0, 0.5)
+            pfp.BackgroundTransparency = 1
+            pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+            Instance.new("UIAspectRatioConstraint", pfp).AspectRatio = 1
+            Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
+
+            local welcomeMsg = Instance.new("TextLabel", profileFrame)
+            welcomeMsg.Size = UDim2.new(0.6, 0, 0.8, 0)
+            welcomeMsg.Position = UDim2.new(0.38, 0, 0.5, 0)
+            welcomeMsg.AnchorPoint = Vector2.new(0, 0.5)
+            welcomeMsg.BackgroundTransparency = 1
+            welcomeMsg.Text = "Welcome,\n" .. Players.LocalPlayer.DisplayName .. "!"
+            welcomeMsg.TextColor3 = TextColor
+            welcomeMsg.Font = Enum.Font.GothamBold
+            welcomeMsg.TextScaled = true
+            welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
+
+            local aboutFrame = Instance.new("Frame", page)
+            aboutFrame.Size = UDim2.new(1, 0, 0.3, 0)
+            aboutFrame.Position = UDim2.new(0, 0, 0.48, 0)
+            aboutFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            aboutFrame.BackgroundTransparency = 0.6
+            Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0.05, 0)
+
+            local aboutText = Instance.new("TextLabel", aboutFrame)
+            aboutText.Size = UDim2.new(0.95, 0, 0.8, 0)
+            aboutText.Position = UDim2.new(0.5, 0, 0.5, 0)
+            aboutText.AnchorPoint = Vector2.new(0.5, 0.5)
+            aboutText.BackgroundTransparency = 1
+            aboutText.Text = "TOKAI HUB | Mobile: 100% | 360p+"
+            aboutText.TextColor3 = TextColor
+            aboutText.Font = Enum.Font.Gotham
+            aboutText.TextScaled = true
+        end
         
         function elements:AddDiscordButton(inviteLink)
             local btn = Instance.new("TextButton", page)
-            btn.Name = "DiscordButton"
             btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-            btn.BackgroundTransparency = 0.2
-            btn.Text = "DISCORD"
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+            btn.Text = "JOIN DISCORD"
+            btn.TextColor3 = Color3.new(1,1,1)
             btn.Font = Enum.Font.GothamBold
             btn.TextScaled = true
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
             
-            local uipadding = Instance.new("UIPadding", btn)
-            uipadding.PaddingTop = UDim.new(0.25, 0)
-            uipadding.PaddingBottom = UDim.new(0.25, 0)
+            -- Nếu là tab Home, đặt vị trí cố định phía dưới
+            if name == "Home" then
+                btn.Size = UDim2.new(1, 0, 0.15, 0)
+                btn.Position = UDim2.new(0, 0, 0.82, 0)
+            end
 
             btn.MouseButton1Click:Connect(function()
-                if setclipboard then
-                    setclipboard(inviteLink)
-                    btn.Text = "COPIED!"
-                    task.wait(0.5)
-                    btn.Text = "DISCORD"
-                end
+                if setclipboard then setclipboard(inviteLink) btn.Text = "COPIED!" task.wait(0.5) btn.Text = "JOIN DISCORD" end
             end)
         end
 
@@ -204,13 +192,8 @@ function Library:CreateWindow()
             btn.TextScaled = true
             Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
             btn.MouseButton1Click:Connect(callback)
-            
-            local uipadding = Instance.new("UIPadding", btn)
-            uipadding.PaddingTop = UDim.new(0.2, 0)
-            uipadding.PaddingBottom = UDim.new(0.2, 0)
         end
         
-        -- Mở tab đầu tiên mặc định
         if #sidebar:GetChildren() == 1 then page.Visible = true end
         return elements
     end
@@ -235,15 +218,23 @@ function Library:CreateWindow()
     return Library
 end
 
--- SỬ DỤNG VỚI 3 TAB:
+-- --- THỰC THI ---
 local win = Library:CreateWindow()
 
+-- 1. Tab Home (Nơi chứa Profile và thông tin Hub)
+local homeTab = win:CreateTab("Home", "H")
+homeTab:AddHomeProfile() -- Thêm Avatar và Lời chào vào đây
+homeTab:AddDiscordButton("https://discord.gg/nn783R2fK2")
+
+-- 2. Tab Main (Script chính - Bây giờ đã rất rộng)
 local mainTab = win:CreateTab("Main", "M")
-mainTab:AddButton("Main Function Here", function() print("Main clicked") end)
-mainTab:AddDiscordButton("https://discord.gg/nn783R2fK2")
+mainTab:AddButton("Auto Farm Level", function() print("Farming...") end)
+mainTab:AddButton("Kill Aura", function() print("Killed!") end)
 
+-- 3. Tab Miss
 local missTab = win:CreateTab("Miss", "X")
-missTab:AddButton("Miss Function Here", function() print("Miss clicked") end)
+missTab:AddButton("Speed Hack", function() Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50 end)
 
+-- 4. Tab Setting
 local settingTab = win:CreateTab("Setting", "S")
 settingTab:AddButton("Destroy UI", function() CleanupOldUI() end)
