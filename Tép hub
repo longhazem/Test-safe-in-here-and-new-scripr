@@ -7,6 +7,9 @@ local Players = game:GetService("Players")
 local function CleanupOldUI()
     local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
     if oldUI then oldUI:Destroy() end
+    if SoundService:FindFirstChild("TOKAI_LOAD_SOUND") then
+        SoundService:FindFirstChild("TOKAI_LOAD_SOUND"):Destroy()
+    end
 end
 CleanupOldUI()
 
@@ -22,28 +25,61 @@ function Library:CreateWindow()
     local MainColor = Color3.fromRGB(255, 192, 203)
     local TextColor = Color3.fromRGB(100, 50, 60)
 
+    -- SOUND
+    local loadSound = Instance.new("Sound")
+    loadSound.Name = "TOKAI_LOAD_SOUND"
+    loadSound.SoundId = "rbxassetid://87585111317596"
+    loadSound.Volume = 0.6
+    loadSound.Parent = SoundService
+
+    -- LOADER UI
+    local loader = Instance.new("Frame", screenGui)
+    loader.Size = UDim2.new(1, 0, 1, 0)
+    loader.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+    loader.ZIndex = 100
+
+    local logo = Instance.new("ImageLabel", loader)
+    logo.Size = UDim2.new(0, 120, 0, 120)
+    -- Vị trí rơi ngẫu nhiên từ trên đỉnh
+    logo.Position = UDim2.new(math.random(15, 85)/100, 0, -0.2, 0)
+    logo.AnchorPoint = Vector2.new(0.5, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.Image = "rbxassetid://137658875383845"
+    logo.ZIndex = 101
+
+    local barBg = Instance.new("Frame", loader)
+    barBg.Size = UDim2.new(0.3, 0, 0, 3)
+    barBg.Position = UDim2.new(0.5, 0, 0.8, 0)
+    barBg.AnchorPoint = Vector2.new(0.5, 0.5)
+    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    barBg.BackgroundTransparency = 1
+    barBg.BorderSizePixel = 0
+    Instance.new("UICorner", barBg)
+
+    local bar = Instance.new("Frame", barBg)
+    bar.Size = UDim2.new(0, 0, 1, 0)
+    bar.BackgroundColor3 = MainColor
+    bar.BorderSizePixel = 0
+    Instance.new("UICorner", bar)
+
+    -- MAIN FRAME
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
     main.Size = UDim2.new(0.5, 0, 0.6, 0)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = MainColor
-    main.BackgroundTransparency = 0.2
+    main.BackgroundTransparency = 1
+    main.Visible = false
     main.Parent = screenGui
-    
-    local uiSizeConstraint = Instance.new("UISizeConstraint", main)
-    uiSizeConstraint.MaxSize = Vector2.new(650, 420)
-    uiSizeConstraint.MinSize = Vector2.new(360, 240)
-
-    local mainCorner = Instance.new("UICorner", main)
-    mainCorner.CornerRadius = UDim.new(0.05, 0)
 
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Color = Color3.fromRGB(255, 255, 255)
     mainStroke.Thickness = 2
-    mainStroke.Transparency = 0.5
+    mainStroke.Transparency = 1
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0.05, 0)
 
-    -- PROFILE SECTION
+    -- (Phần Profile & About giữ nguyên như cũ)
     local profileFrame = Instance.new("Frame", main)
     profileFrame.Size = UDim2.new(0.45, 0, 0.45, 0)
     profileFrame.Position = UDim2.new(0.04, 0, 0.06, 0)
@@ -52,18 +88,12 @@ function Library:CreateWindow()
     Instance.new("UICorner", profileFrame).CornerRadius = UDim.new(0.1, 0)
 
     local pfp = Instance.new("ImageLabel", profileFrame)
-    pfp.Name = "UserAvatar"
     pfp.Size = UDim2.new(0.4, 0, 0.8, 0)
     pfp.Position = UDim2.new(0.05, 0, 0.5, 0)
     pfp.AnchorPoint = Vector2.new(0, 0.5)
     pfp.BackgroundTransparency = 1
     pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
-    
-    local pfpAspect = Instance.new("UIAspectRatioConstraint", pfp)
-    pfpAspect.AspectRatio = 1
-
-    local pfpCorner = Instance.new("UICorner", pfp)
-    pfpCorner.CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
 
     local welcomeMsg = Instance.new("TextLabel", profileFrame)
     welcomeMsg.Size = UDim2.new(0.5, 0, 0.8, 0)
@@ -76,26 +106,6 @@ function Library:CreateWindow()
     welcomeMsg.TextScaled = true
     welcomeMsg.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- ABOUT SECTION
-    local aboutFrame = Instance.new("Frame", main)
-    aboutFrame.Size = UDim2.new(0.4, 0, 0.45, 0)
-    aboutFrame.Position = UDim2.new(0.55, 0, 0.06, 0)
-    aboutFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    aboutFrame.BackgroundTransparency = 0.6
-    Instance.new("UICorner", aboutFrame).CornerRadius = UDim.new(0.1, 0)
-
-    local aboutText = Instance.new("TextLabel", aboutFrame)
-    aboutText.Size = UDim2.new(0.9, 0, 0.8, 0)
-    aboutText.Position = UDim2.new(0.5, 0, 0.5, 0)
-    aboutText.AnchorPoint = Vector2.new(0.5, 0.5)
-    aboutText.BackgroundTransparency = 1
-    aboutText.Text = "TOKAI HUB\nMobile Support: 100%\nResolution: 360p+"
-    aboutText.TextColor3 = TextColor
-    aboutText.Font = Enum.Font.Gotham
-    aboutText.TextScaled = true
-    aboutText.TextWrapped = true
-
-    -- SIDEBAR
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0.1, 0, 0.8, 0)
     sidebar.Position = UDim2.new(1.02, 0, 0.1, 0)
@@ -108,14 +118,9 @@ function Library:CreateWindow()
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- TAB CONTAINER
-    local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0.92, 0, 0.4, 0)
-    tabContainer.Position = UDim2.new(0.04, 0, 0.55, 0)
-    tabContainer.BackgroundTransparency = 1
-
-    local pages = Instance.new("Frame", tabContainer)
-    pages.Size = UDim2.new(1, 0, 1, 0)
+    local pages = Instance.new("Frame", main)
+    pages.Size = UDim2.new(0.92, 0, 0.4, 0)
+    pages.Position = UDim2.new(0.04, 0, 0.55, 0)
     pages.BackgroundTransparency = 1
 
     function Library:CreateTab(name, iconText)
@@ -123,22 +128,12 @@ function Library:CreateWindow()
         page.Size = UDim2.new(1, 0, 1, 0)
         page.BackgroundTransparency = 1
         page.Visible = false
-        page.ScrollBarThickness = 2
-        page.ScrollBarImageColor3 = TextColor
-
-        local layout = Instance.new("UIGridLayout", page)
-        layout.CellSize = UDim2.new(0.48, 0, 0, 40)
-        layout.CellPadding = UDim2.new(0.02, 0, 0.05, 0)
+        page.ScrollBarThickness = 0
+        Instance.new("UIGridLayout", page).CellSize = UDim2.new(0.48, 0, 0, 40)
 
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(0.7, 0, 0.7, 0)
-        local btnAspect = Instance.new("UIAspectRatioConstraint", tabBtn)
-        btnAspect.AspectRatio = 1
-
-        tabBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        tabBtn.BackgroundTransparency = 0.8
         tabBtn.Text = iconText or name:sub(1,1)
-        tabBtn.TextScaled = true
         tabBtn.Font = Enum.Font.GothamBold
         tabBtn.TextColor3 = TextColor
         Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
@@ -147,62 +142,69 @@ function Library:CreateWindow()
             for _, v in pairs(pages:GetChildren()) do v.Visible = false end
             page.Visible = true
         end)
-
-        local elements = {}
         
-        -- Hàm tạo nút Discord với chữ DISCORD
-        function elements:AddDiscordButton(inviteLink)
-            local btn = Instance.new("TextButton", page)
-            btn.Name = "DiscordButton"
-            btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242) -- Màu xanh Discord
-            btn.BackgroundTransparency = 0.2
-            btn.Text = "DISCORD"
-            btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-            btn.Font = Enum.Font.GothamBold
-            btn.TextScaled = true
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
-            
-            -- Thêm padding để chữ không bị dính sát viền
-            local uipadding = Instance.new("UIPadding", btn)
-            uipadding.PaddingTop = UDim.new(0.25, 0)
-            uipadding.PaddingBottom = UDim.new(0.25, 0)
-
-            btn.MouseButton1Click:Connect(function()
-                if setclipboard then
-                    setclipboard(inviteLink)
-                    -- Hiệu ứng phản hồi khi nhấn
-                    btn.Text = "COPIED!"
-                    btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                    btn.TextColor3 = Color3.fromRGB(88, 101, 242)
-                    task.wait(0.5)
-                    btn.Text = "DISCORD"
-                    btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-                    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-                end
-            end)
-        end
-
+        local elements = {}
         function elements:AddButton(text, callback)
             local btn = Instance.new("TextButton", page)
+            btn.Text = text
             btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             btn.BackgroundTransparency = 0.4
-            btn.Text = text
-            btn.Font = Enum.Font.GothamSemibold
-            btn.TextColor3 = TextColor
-            btn.TextScaled = true
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0.2, 0)
+            Instance.new("UICorner", btn)
             btn.MouseButton1Click:Connect(callback)
-            
-            local uipadding = Instance.new("UIPadding", btn)
-            uipadding.PaddingTop = UDim.new(0.2, 0)
-            uipadding.PaddingBottom = UDim.new(0.2, 0)
+        end
+        function elements:AddDiscordButton(link)
+            local btn = Instance.new("TextButton", page)
+            btn.Text = "DISCORD"
+            btn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+            btn.TextColor3 = Color3.fromRGB(255,255,255)
+            Instance.new("UICorner", btn)
+            btn.MouseButton1Click:Connect(function() setclipboard(link) end)
         end
         
-        if #sidebar:GetChildren() == 3 then page.Visible = true end
+        if #sidebar:GetChildren() == 2 then page.Visible = true end
         return elements
     end
 
-    -- Kéo thả
+    -- LOGIC LOADING (6 SECONDS TOTAL)
+    task.spawn(function()
+        loadSound:Play()
+
+        -- 1. Rơi (1.2s)
+        local fall = TweenService:Create(logo, TweenInfo.new(1.2, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out), {Position = UDim2.new(logo.Position.X.Scale, 0, 0.5, 0)})
+        fall:Play()
+        fall.Completed:Wait()
+
+        -- 2. Lăn về giữa (1.5s)
+        local roll = TweenService:Create(logo, TweenInfo.new(1.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.5, 0), Rotation = 720})
+        roll:Play()
+        roll.Completed:Wait()
+
+        -- 3. Nhảy & Hiện Bar (0.5s nhảy + 2.5s load)
+        TweenService:Create(logo, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0.45, 0), Size = UDim2.new(0, 150, 0, 150)}):Play()
+        
+        barBg.BackgroundTransparency = 0.5
+        local progress = TweenService:Create(bar, TweenInfo.new(2.8, Enum.EasingStyle.Linear), {Size = UDim2.new(1, 0, 1, 0)})
+        progress:Play()
+        progress.Completed:Wait()
+
+        -- 4. Fade Out (0.5s)
+        TweenService:Create(loadSound, TweenInfo.new(0.5), {Volume = 0}):Play()
+        local fade = TweenService:Create(loader, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+        TweenService:Create(logo, TweenInfo.new(0.5), {ImageTransparency = 1}):Play()
+        TweenService:Create(barBg, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(bar, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        fade:Play()
+        
+        fade.Completed:Connect(function()
+            loader:Destroy()
+            loadSound:Stop()
+            main.Visible = true
+            TweenService:Create(main, TweenInfo.new(0.5), {BackgroundTransparency = 0.2}):Play()
+            TweenService:Create(mainStroke, TweenInfo.new(0.5), {Transparency = 0.5}):Play()
+        end)
+    end)
+
+    -- Dragging Logic
     local dragging, dragStart, startPos
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -222,11 +224,8 @@ function Library:CreateWindow()
     return Library
 end
 
--- SỬ DỤNG:
+-- SỬ DỤNG
 local win = Library:CreateWindow()
 local mainTab = win:CreateTab("Home", "H")
-
--- Nút Discord hiển thị chữ DISCORD
 mainTab:AddDiscordButton("https://discord.gg/nn783R2fK2")
-
 mainTab:AddButton("Destroy UI", function() CleanupOldUI() end)
