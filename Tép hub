@@ -21,6 +21,15 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
+    -- // PHẦN ÂM THANH KHI BẬT HUB // --
+    local openSound = Instance.new("Sound")
+    openSound.SoundId = "rbxassetid://90621979353525"
+    openSound.Volume = 1
+    openSound.Parent = SoundService
+    openSound:Play()
+    game:GetService("Debris"):AddItem(openSound, 5) -- Tự động xóa sound sau 5 giây để tránh rác script
+    -- // ------------------------- // --
+
     local MainColor = Color3.fromRGB(255, 182, 193)
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink = Color3.fromRGB(235, 110, 140)
@@ -138,7 +147,6 @@ function Library:CreateWindow()
                 box.BackgroundTransparency = 0.6
                 Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
                 
-                -- Thanh bar ở góc (Accent Bar)
                 if titleText then
                     local bar = Instance.new("Frame", box)
                     bar.Size = UDim2.new(0, 18, 1, 0)
@@ -178,7 +186,7 @@ function Library:CreateWindow()
             greet.TextXAlignment = "Left"
             greet.BackgroundTransparency = 1
 
-            -- 2. ABOUT BOX (Có thanh bar góc)
+            -- 2. ABOUT BOX
             local aboutBox = CreateBox(UDim2.new(0.37, 0, 0.47, 0), UDim2.new(0.63, 0, 0, 0), "A\nB\nO\nU\nT")
             local aboutDesc = Instance.new("TextLabel", aboutBox)
             aboutDesc.Size = UDim2.new(0.7, 0, 0.8, 0)
@@ -219,7 +227,6 @@ function Library:CreateWindow()
             ampmLabel.Font = Enum.Font.GothamBold
             ampmLabel.BackgroundTransparency = 1
 
-            -- Hàng UTC và Ngày tháng (Đã chính lên cùng hàng)
             local utcLabel = Instance.new("TextLabel", statBox)
             utcLabel.Size = UDim2.new(0, 60, 0, 10)
             utcLabel.Position = UDim2.new(0, 5, 0, 28)
@@ -231,7 +238,7 @@ function Library:CreateWindow()
 
             local dateLabel = Instance.new("TextLabel", statBox)
             dateLabel.Size = UDim2.new(0, 60, 0, 10)
-            dateLabel.Position = UDim2.new(0, 68, 0, 28) -- Đặt ngay cạnh UTC
+            dateLabel.Position = UDim2.new(0, 68, 0, 28)
             dateLabel.Text = os.date("%b %d")
             dateLabel.TextSize = 6
             dateLabel.TextColor3 = TextColor
