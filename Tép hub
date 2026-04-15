@@ -171,7 +171,7 @@ function Library:CreateWindow()
             local greet = Instance.new("TextLabel", userBox)
             greet.Size = UDim2.new(0.5, 0, 0.5, 0)
             greet.Position = UDim2.new(0, 65, 0.2, 0)
-            greet.Text = "The lanterns light your way~, \n" .. Players.LocalPlayer.DisplayName
+            greet.Text = "konnichiwa. oniichan❤️~, \n" .. Players.LocalPlayer.DisplayName
             greet.Font = Enum.Font.GothamBold
             greet.TextColor3 = TextColor
             greet.TextSize = 9
@@ -183,7 +183,7 @@ function Library:CreateWindow()
             local aboutDesc = Instance.new("TextLabel", aboutBox)
             aboutDesc.Size = UDim2.new(0.7, 0, 0.8, 0)
             aboutDesc.Position = UDim2.new(0.05, 0, 0.1, 0)
-            aboutDesc.Text = "Yae Miko is the head shrine maiden of the Grand Narukami Shrine."
+            aboutDesc.Text = "🐧 TokaiHub eat you."
             aboutDesc.Font = Enum.Font.Gotham
             aboutDesc.TextColor3 = TextColor
             aboutDesc.TextSize = 7
