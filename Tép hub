@@ -70,12 +70,12 @@ function Library:CreateWindow()
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Thickness = 2
 
-    -- // HIỆU ỨNG VIỀN MÀU: TRẮNG - HỒNG - TÍM NHẠT // --
+    -- // HIỆU ỨNG VIỀN MÀU // --
     coroutine.wrap(function()
         local colors = {
-            Color3.fromRGB(255, 255, 255), -- Trắng
-            Color3.fromRGB(255, 192, 203), -- Hồng
-            Color3.fromRGB(230, 190, 255)  -- Tím nhạt
+            Color3.fromRGB(255, 255, 255),
+            Color3.fromRGB(255, 192, 203),
+            Color3.fromRGB(230, 190, 255)
         }
         while task.wait() do
             local t = (math.sin(tick() * 2) + 1) / 2
@@ -85,7 +85,7 @@ function Library:CreateWindow()
         end
     end)()
 
-    -- // LOGIC ĐÓNG MỞ (TOGGLE UI) // --
+    -- // LOGIC ĐÓNG MỞ // --
     local MainSize = UDim2.new(0, 364, 0, 240)
     local isToggling = false
     local function ToggleUI()
@@ -138,14 +138,6 @@ function Library:CreateWindow()
         end)
     end
     EnableDrag(main); EnableDrag(openBtn)
-
-    -- Thanh Bar dưới cùng trang trí
-    local bottomBar = Instance.new("Frame", main)
-    bottomBar.Size = UDim2.new(0.9, 0, 0, 2)
-    bottomBar.Position = UDim2.new(0.05, 0, 0.95, -5)
-    bottomBar.BackgroundColor3 = Color3.new(1, 1, 1)
-    bottomBar.BackgroundTransparency = 0.6
-    Instance.new("UICorner", bottomBar)
 
     -- SIDEBAR
     local sidebar = Instance.new("Frame", main)
@@ -201,7 +193,6 @@ function Library:CreateWindow()
 
         local elements = {}
 
-        -- // GIỮ NGUYÊN HOÀN TOÀN DASHBOARD HOME // --
         function elements:AddDashboard()
             layout:Destroy() 
             
@@ -233,7 +224,8 @@ function Library:CreateWindow()
                 return box
             end
 
-            local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0))
+            -- // USER BOX CÓ THÊM THANH BAR "PLAYER" // --
+            local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0), "P\nL\nA\nY\nE\nR")
             local pfp = Instance.new("ImageLabel", userBox)
             pfp.Size = UDim2.new(0, 55, 0, 55)
             pfp.Position = UDim2.new(0, 5, 0.5, -27)
@@ -242,7 +234,7 @@ function Library:CreateWindow()
             Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
 
             local greet = Instance.new("TextLabel", userBox)
-            greet.Size = UDim2.new(0.5, 0, 0.5, 0)
+            greet.Size = UDim2.new(0.45, 0, 0.5, 0) -- Giảm width tí để ko đè lên bar
             greet.Position = UDim2.new(0, 65, 0.2, 0)
             greet.Text = "konnichiwa. oniichan❤️~, \n" .. Players.LocalPlayer.DisplayName
             greet.Font = Enum.Font.GothamBold
@@ -256,12 +248,8 @@ function Library:CreateWindow()
             aboutDesc.Size = UDim2.new(0.7, 0, 0.8, 0)
             aboutDesc.Position = UDim2.new(0.05, 0, 0.1, 0)
             aboutDesc.Text = "🐧 TokaiHub eat you."
-            aboutDesc.Font = Enum.Font.Gotham
-            aboutDesc.TextColor3 = TextColor
-            aboutDesc.TextSize = 7
-            aboutDesc.TextWrapped = true
-            aboutDesc.TextXAlignment = "Left"
-            aboutDesc.BackgroundTransparency = 1
+            aboutDesc.Font = Enum.Font.Gotham; aboutDesc.TextColor3 = TextColor; aboutDesc.TextSize = 7
+            aboutDesc.TextWrapped = true; aboutDesc.TextXAlignment = "Left"; aboutDesc.BackgroundTransparency = 1
 
             local musicBox = CreateBox(UDim2.new(0.35, 0, 0.47, 0), UDim2.new(0, 0, 0.53, 0), "M\nU\nS\nI\nC")
 
@@ -315,7 +303,7 @@ function Library:CreateWindow()
     return Library
 end
 
--- --- KHỞI CHẠY ---
+-- --- TEST ---
 local win = Library:CreateWindow()
 local homeTab = win:CreateTab("Home", "H")
 homeTab:AddDashboard()
