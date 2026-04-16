@@ -27,14 +27,16 @@ function Library:CreateWindow()
     openSound.Volume = 1
     openSound.Parent = SoundService
     openSound:Play()
-    game:GetService("Debris"):AddItem(openSound, 5) -- Tự động xóa sound sau 5 giây để tránh rác script
-    -- // ------------------------- // --
+    game:GetService("Debris"):AddItem(openSound, 5)
 
     local MainColor = Color3.fromRGB(255, 182, 193)
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink = Color3.fromRGB(235, 110, 140)
 
-    -- MAIN FRAME (364px cho Mobile)
+    -- Biến trạng thái khóa UI
+    local uiLocked = false
+
+    -- MAIN FRAME
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
     main.Size = UDim2.new(0, 364, 0, 240)
@@ -57,6 +59,9 @@ function Library:CreateWindow()
         main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
     main.InputBegan:Connect(function(input)
+        -- Kiểm tra nếu UI đang khóa thì không cho kéo
+        if uiLocked then return end
+        
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -74,6 +79,49 @@ function Library:CreateWindow()
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then update(input) end
     end)
+
+    -- // TOOLBAR (THANH CÔNG CỤ: THOÁT & KHÓA) // --
+    local toolBar = Instance.new("Frame", main)
+    toolBar.Name = "ToolBar"
+    toolBar.Size = UDim2.new(0, 70, 0, 25)
+    toolBar.Position = UDim2.new(0, 10, 0, -30) -- Nằm phía trên Main Frame
+    toolBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    toolBar.BackgroundTransparency = 0.5
+    Instance.new("UICorner", toolBar).CornerRadius = UDim.new(0, 8)
+
+    local toolLayout = Instance.new("UIListLayout", toolBar)
+    toolLayout.FillDirection = Enum.FillDirection.Horizontal
+    toolLayout.Padding = UDim.new(0, 5)
+    toolLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    toolLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+    -- Nút Khóa UI
+    local lockBtn = Instance.new("TextButton", toolBar)
+    lockBtn.Size = UDim2.new(0, 20, 0, 20)
+    lockBtn.BackgroundTransparency = 1
+    lockBtn.Text = "🔓" -- Mặc định là mở khóa
+    lockBtn.TextSize = 12
+    
+    lockBtn.MouseButton1Click:Connect(function()
+        uiLocked = not uiLocked
+        lockBtn.Text = uiLocked and "🔒" or "🔓"
+        -- Hiệu ứng đổi màu nhẹ để nhận biết
+        lockBtn.TextColor3 = uiLocked and Color3.fromRGB(255, 0, 0) or Color3.new(1,1,1)
+    end)
+
+    -- Nút Thoát (X)
+    local closeBtn = Instance.new("TextButton", toolBar)
+    closeBtn.Size = UDim2.new(0, 20, 0, 20)
+    closeBtn.BackgroundTransparency = 1
+    closeBtn.Text = "✕"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14
+
+    closeBtn.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+    end)
+    -- // ------------------------- // --
 
     -- Thanh Bar dưới cùng trang trí
     local bottomBar = Instance.new("Frame", main)
@@ -167,7 +215,6 @@ function Library:CreateWindow()
                 return box
             end
 
-            -- 1. USER BOX
             local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0))
             local pfp = Instance.new("ImageLabel", userBox)
             pfp.Size = UDim2.new(0, 55, 0, 55)
@@ -186,7 +233,6 @@ function Library:CreateWindow()
             greet.TextXAlignment = "Left"
             greet.BackgroundTransparency = 1
 
-            -- 2. ABOUT BOX
             local aboutBox = CreateBox(UDim2.new(0.37, 0, 0.47, 0), UDim2.new(0.63, 0, 0, 0), "A\nB\nO\nU\nT")
             local aboutDesc = Instance.new("TextLabel", aboutBox)
             aboutDesc.Size = UDim2.new(0.7, 0, 0.8, 0)
@@ -199,10 +245,8 @@ function Library:CreateWindow()
             aboutDesc.TextXAlignment = "Left"
             aboutDesc.BackgroundTransparency = 1
 
-            -- 3. MUSIC BOX
             local musicBox = CreateBox(UDim2.new(0.35, 0, 0.47, 0), UDim2.new(0, 0, 0.53, 0), "M\nU\nS\nI\nC")
 
-            -- 4. STATUS BOX
             local statBox = CreateBox(UDim2.new(0.62, 0, 0.47, 0), UDim2.new(0.38, 0, 0.53, 0), "S\nT\nA\nT\nU\nS")
             
             local timeLabel = Instance.new("TextLabel", statBox)
