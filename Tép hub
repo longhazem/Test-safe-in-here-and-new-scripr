@@ -6,7 +6,7 @@ local Players = game:GetService("Players")
 
 local startTime = os.time()
 _G.ToggleKey = Enum.KeyCode.RightControl
-local isLocked = false -- Trạng thái khóa kéo
+local isLocked = false 
 
 local function CleanupOldUI()
     local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
@@ -32,18 +32,11 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
-    local openSound = Instance.new("Sound")
-    openSound.SoundId = "rbxassetid://90621979353525"
-    openSound.Volume = 1
-    openSound.Parent = SoundService
-    openSound:Play()
-    game:GetService("Debris"):AddItem(openSound, 5)
-
     local MainColor = Color3.fromRGB(255, 182, 193)
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink = Color3.fromRGB(235, 110, 140)
 
-    -- // OPEN BUTTON (MOBILE) // --
+    -- // NÚT MỞ (MOBILE) // --
     local openBtn = Instance.new("ImageButton", screenGui)
     openBtn.Name = "OpenButton"
     openBtn.Size = UDim2.new(0, 50, 0, 50)
@@ -64,16 +57,17 @@ function Library:CreateWindow()
     main.BackgroundColor3 = MainColor
     main.BackgroundTransparency = 0.3
     main.Parent = screenGui
-    main.ClipsDescendants = false -- Để Toolbar lòi ra ngoài
+    main.ClipsDescendants = false 
     
     Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Thickness = 2
 
-    -- // TOOLBAR (Bên phải Frame chính) // --
+    -- // TOOLBAR BÊN PHẢI // --
     local toolbar = Instance.new("Frame", main)
-    toolbar.Size = UDim2.new(0, 35, 0, 110)
-    toolbar.Position = UDim2.new(1, 5, 0, 10) -- Nằm sát lề phải
+    toolbar.Name = "Toolbar"
+    toolbar.Size = UDim2.new(0, 35, 0, 100)
+    toolbar.Position = UDim2.new(1, 5, 0, 10)
     toolbar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     toolbar.BackgroundTransparency = 0.7
     Instance.new("UICorner", toolbar).CornerRadius = UDim.new(0, 10)
@@ -89,16 +83,16 @@ function Library:CreateWindow()
         b.Text = icon
         b.TextColor3 = Color3.new(1, 1, 1)
         b.Font = Enum.Font.GothamBold
-        b.TextSize = 14
+        b.TextSize = 16
         Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
         return b
     end
 
-    local closeTool = CreateToolBtn("✕", Color3.fromRGB(255, 100, 100))
+    local closeTool = CreateToolBtn("-", Color3.fromRGB(255, 100, 100)) -- Nút tắt bằng dấu -
     local bindTool = CreateToolBtn("⌨", DarkPink)
     local lockTool = CreateToolBtn("🔓", Color3.fromRGB(100, 200, 100))
 
-    -- // LOGIC MÀU VIỀN // --
+    -- Rainbow Stroke
     coroutine.wrap(function()
         local colors = {Color3.fromRGB(255,255,255), Color3.fromRGB(255,192,203), Color3.fromRGB(230,190,255)}
         while task.wait() do
@@ -119,7 +113,7 @@ function Library:CreateWindow()
             tw:Play()
             tw.Completed:Connect(function()
                 main.Visible = false
-                openBtn.Visible = true
+                if openBtn.Parent then openBtn.Visible = true end
                 isToggling = false
             end)
         else
@@ -132,22 +126,28 @@ function Library:CreateWindow()
         end
     end
 
-    -- Toolbar Events
+    -- Toolbar Logic
     closeTool.MouseButton1Click:Connect(function() PlayClickSound(); ToggleUI() end)
     
+    local binding = false
     bindTool.MouseButton1Click:Connect(function()
+        if binding then return end
         PlayClickSound()
+        binding = true
         bindTool.Text = "..."
+        
         local connection
-        connection = UserInputService.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.Keyboard then
-                _G.ToggleKey = i.KeyCode
+        connection = UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Keyboard then
+                _G.ToggleKey = input.KeyCode
                 bindTool.Text = "⌨"
+                binding = false
                 connection:Disconnect()
-            elseif i.UserInputType == Enum.UserInputType.Touch then
-                -- Nếu là Mobile: Ẩn luôn nút nhỏ
+            elseif input.UserInputType == Enum.UserInputType.Touch then
+                -- Mobile ẩn hoàn toàn UI nhỏ
                 openBtn.Visible = false
                 bindTool.Text = "⌨"
+                binding = false
                 connection:Disconnect()
             end
         end)
@@ -163,33 +163,32 @@ function Library:CreateWindow()
     openBtn.MouseButton1Click:Connect(function() PlayClickSound(); ToggleUI() end)
     
     UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == _G.ToggleKey then PlayClickSound(); ToggleUI() end
+        if not gpe and input.KeyCode == _G.ToggleKey then 
+            PlayClickSound()
+            ToggleUI() 
+        end
     end)
 
-    -- // HÀM KÉO UI (Cập nhật logic khóa) // --
+    -- Kéo UI
     local function EnableDrag(obj)
         local dragging, dragInput, dragStart, startPos
-
         obj.InputBegan:Connect(function(input)
-            if isLocked then return end -- Nếu khóa thì không cho kéo
+            if isLocked then return end
             if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                 dragging = true
                 dragStart = input.Position
                 startPos = obj.Position
-
                 input.Changed:Connect(function()
                     if input.UserInputState == Enum.UserInputState.End then dragging = false end
                 end)
             end
         end)
-
         obj.InputChanged:Connect(function(input)
             if isLocked then return end
             if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                 dragInput = input
             end
         end)
-
         UserInputService.InputChanged:Connect(function(input)
             if input == dragInput and dragging and not isLocked then
                 local delta = input.Position - dragStart
@@ -199,24 +198,20 @@ function Library:CreateWindow()
     end
     EnableDrag(main); EnableDrag(openBtn)
 
-    -- Sidebar & Tabs (Giữ nguyên logic cũ)
+    -- Tabs System
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0, 35, 0, 180)
     sidebar.Position = UDim2.new(1, -40, 0.5, -90)
     sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     sidebar.BackgroundTransparency = 0.7
     Instance.new("UICorner", sidebar).CornerRadius = UDim.new(1, 0)
-    local sideLayout = Instance.new("UIListLayout", sidebar)
-    sideLayout.Padding = UDim.new(0, 8)
-    sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    Instance.new("UIListLayout", sidebar).Padding = UDim.new(0, 8)
+    sidebar.UIListLayout.HorizontalAlignment = "Center"
+    sidebar.UIListLayout.VerticalAlignment = "Center"
 
-    local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0, 310, 0, 200)
-    tabContainer.Position = UDim2.new(0, 10, 0, 15)
-    tabContainer.BackgroundTransparency = 1
-    local pages = Instance.new("Frame", tabContainer)
-    pages.Size = UDim2.new(1, 0, 1, 0)
+    local pages = Instance.new("Frame", main)
+    pages.Size = UDim2.new(0, 300, 0, 210)
+    pages.Position = UDim2.new(0, 10, 0, 15)
     pages.BackgroundTransparency = 1
 
     function Library:CreateTab(name, iconText)
@@ -226,7 +221,7 @@ function Library:CreateWindow()
         page.BackgroundTransparency = 1
         page.Visible = false
         page.ScrollBarThickness = 0
-        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        page.AutomaticCanvasSize = "Y"
 
         local layout = Instance.new("UIGridLayout", page)
         layout.CellSize = UDim2.new(0.48, 0, 0, 35)
@@ -235,12 +230,9 @@ function Library:CreateWindow()
         local tabBtn = Instance.new("TextButton", sidebar)
         tabBtn.Size = UDim2.new(0, 28, 0, 28)
         tabBtn.BackgroundColor3 = DarkPink
-        tabBtn.BackgroundTransparency = 0.2
         tabBtn.Text = iconText or name:sub(1,1)
-        tabBtn.TextScaled = true
-        tabBtn.Font = Enum.Font.GothamBold
-        tabBtn.TextColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
+        tabBtn.Font = "GothamBold"; tabBtn.TextColor3 = Color3.new(1,1,1); tabBtn.TextScaled = true
+        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1,0)
 
         tabBtn.MouseButton1Click:Connect(function()
             PlayClickSound()
@@ -255,61 +247,65 @@ function Library:CreateWindow()
             local function CreateBox(size, pos, titleText)
                 local box = Instance.new("Frame", page)
                 box.Size = size; box.Position = pos
-                box.BackgroundColor3 = Color3.fromRGB(255, 255, 255); box.BackgroundTransparency = 0.6
-                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
+                box.BackgroundColor3 = Color3.new(1,1,1); box.BackgroundTransparency = 0.6
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0,10)
                 if titleText then
                     local bar = Instance.new("Frame", box)
-                    bar.Size = UDim2.new(0, 18, 1, 0); bar.Position = UDim2.new(1, -18, 0, 0)
-                    bar.BackgroundColor3 = DarkPink; bar.BackgroundTransparency = 0.2
-                    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 10)
-                    local label = Instance.new("TextLabel", bar)
-                    label.Size = UDim2.new(1, 0, 1, 0); label.Text = titleText
-                    label.Font = Enum.Font.GothamBold; label.TextColor3 = Color3.new(1, 1, 1)
-                    label.TextSize = 7; label.TextWrapped = true; label.BackgroundTransparency = 1
+                    bar.Size = UDim2.new(0,15,1,0); bar.Position = UDim2.new(1,-15,0,0)
+                    bar.BackgroundColor3 = DarkPink; Instance.new("UICorner", bar).CornerRadius = UDim.new(0,10)
+                    local l = Instance.new("TextLabel", bar)
+                    l.Size = UDim2.new(1,0,1,0); l.Text = titleText; l.TextColor3 = Color3.new(1,1,1)
+                    l.TextSize = 6; l.Font = "GothamBold"; l.TextWrapped = true; l.BackgroundTransparency = 1
                 end
                 return box
             end
 
-            local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0), "P\nL\nA\nY\nE\nR")
-            local pfp = Instance.new("ImageLabel", userBox)
-            pfp.Size = UDim2.new(0, 50, 0, 50); pfp.Position = UDim2.new(0, 5, 0.5, -25)
-            pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-            pfp.BackgroundTransparency = 1; Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
+            local uBox = CreateBox(UDim2.new(0.6, -5, 0.48, 0), UDim2.new(0,0,0,0), "U\nS\nE\nR")
+            local pfp = Instance.new("ImageLabel", uBox)
+            pfp.Size = UDim2.new(0,45,0,45); pfp.Position = UDim2.new(0,5,0.5,-22.5)
+            pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, "HeadShot", "Size100x100")
+            pfp.BackgroundTransparency = 1; Instance.new("UICorner", pfp).CornerRadius = UDim.new(1,0)
+            
+            local g = Instance.new("TextLabel", uBox)
+            g.Size = UDim2.new(0.5,0,0.8,0); g.Position = UDim2.new(0,55,0.1,0)
+            g.Text = "Hi, oniichan!\n" .. Players.LocalPlayer.DisplayName; g.Font = "GothamBold"; g.TextSize = 8
+            g.TextColor3 = TextColor; g.TextXAlignment = "Left"; g.BackgroundTransparency = 1
 
-            local greet = Instance.new("TextLabel", userBox)
-            greet.Size = UDim2.new(0.45, 0, 0.5, 0); greet.Position = UDim2.new(0, 60, 0.2, 0)
-            greet.Text = "konnichiwa❤️\n" .. Players.LocalPlayer.DisplayName; greet.Font = Enum.Font.GothamBold
-            greet.TextColor3 = TextColor; greet.TextSize = 8; greet.TextXAlignment = "Left"; greet.BackgroundTransparency = 1
+            local sBox = CreateBox(UDim2.new(1, 0, 0.48, 0), UDim2.new(0,0,0.52,0), "S\nT\nA\nT\nU\nS")
+            local tL = Instance.new("TextLabel", sBox)
+            tL.Size = UDim2.new(1,-20,0.4,0); tL.Position = UDim2.new(0,5,0.1,0)
+            tL.Font = "GothamBold"; tL.TextSize = 14; tL.TextColor3 = TextColor; tL.BackgroundTransparency = 1
 
-            local statBox = CreateBox(UDim2.new(0.62, 0, 0.47, 0), UDim2.new(0.38, 0, 0.53, 0), "S\nT\nA\nT\nU\nS")
-            local timeLabel = Instance.new("TextLabel", statBox)
-            timeLabel.Size = UDim2.new(1, -20, 0.5, 0); timeLabel.Position = UDim2.new(0, 5, 0, 5)
-            timeLabel.Font = Enum.Font.GothamBold; timeLabel.TextSize = 14; timeLabel.TextColor3 = TextColor; timeLabel.BackgroundTransparency = 1
+            local uL = Instance.new("TextLabel", sBox)
+            uL.Size = UDim2.new(1,-20,0.3,0); uL.Position = UDim2.new(0,5,0.6,0)
+            uL.Font = "GothamBold"; uL.TextSize = 8; uL.TextColor3 = DarkPink; uL.BackgroundTransparency = 1
 
             task.spawn(function()
                 while task.wait(1) do
-                    timeLabel.Text = os.date("%I:%M:%S %p")
+                    tL.Text = os.date("%I:%M:%S %p")
+                    local d = os.time() - startTime
+                    uL.Text = string.format("Uptime: %dm %ds", math.floor(d/60), d%60)
                 end
             end)
         end
         
-        function elements:AddButton(text, callback)
-            local btn = Instance.new("TextButton", page)
-            btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255); btn.BackgroundTransparency = 0.5
-            btn.Text = text; btn.Font = Enum.Font.GothamSemibold; btn.TextColor3 = TextColor; btn.TextSize = 10
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-            btn.MouseButton1Click:Connect(function() PlayClickSound(); callback() end)
+        function elements:AddButton(text, cb)
+            local b = Instance.new("TextButton", page)
+            b.BackgroundColor3 = Color3.new(1,1,1); b.BackgroundTransparency = 0.5
+            b.Text = text; b.Font = "GothamSemibold"; b.TextColor3 = TextColor; b.TextSize = 10
+            Instance.new("UICorner", b).CornerRadius = UDim.new(0,5)
+            b.MouseButton1Click:Connect(function() PlayClickSound(); cb() end)
         end
         
-        if #sidebar:GetChildren() == 1 then page.Visible = true end
+        if #sidebar:GetChildren() == 2 then page.Visible = true end -- Vì có UIListLayout nên dùng 2
         return elements
     end
     return Library
 end
 
--- TEST
 local win = Library:CreateWindow()
-local home = win:CreateTab("Home", "H")
-home:AddDashboard()
-local mainTab = win:CreateTab("Main", "M")
-mainTab:AddButton("Hello World", function() print("TokaiHub Active") end)
+local h = win:CreateTab("Home", "H")
+h:AddDashboard()
+
+local m = win:CreateTab("Main", "M")
+m:AddButton("Click Test", function() print("TokaiHub Working!") end)
