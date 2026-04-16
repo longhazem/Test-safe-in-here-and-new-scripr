@@ -31,7 +31,6 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
-    -- // PHẦN ÂM THANH KHI BẬT HUB // --
     local openSound = Instance.new("Sound")
     openSound.SoundId = "rbxassetid://90621979353525"
     openSound.Volume = 1
@@ -43,7 +42,6 @@ function Library:CreateWindow()
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink = Color3.fromRGB(235, 110, 140)
 
-    -- // NÚT MỞ UI (OPEN BUTTON) // --
     local openBtn = Instance.new("ImageButton", screenGui)
     openBtn.Name = "OpenButton"
     openBtn.Size = UDim2.new(0, 50, 0, 50)
@@ -55,7 +53,6 @@ function Library:CreateWindow()
     local openStroke = Instance.new("UIStroke", openBtn)
     openStroke.Thickness = 3
 
-    -- MAIN FRAME
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
     main.Size = UDim2.new(0, 364, 0, 240)
@@ -70,7 +67,6 @@ function Library:CreateWindow()
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Thickness = 2
 
-    -- // HIỆU ỨNG VIỀN MÀU // --
     coroutine.wrap(function()
         local colors = {
             Color3.fromRGB(255, 255, 255),
@@ -85,7 +81,6 @@ function Library:CreateWindow()
         end
     end)()
 
-    -- // LOGIC ĐÓNG MỞ // --
     local MainSize = UDim2.new(0, 364, 0, 240)
     local isToggling = false
     local function ToggleUI()
@@ -114,32 +109,44 @@ function Library:CreateWindow()
         if not gpe and input.KeyCode == _G.ToggleKey then PlayClickSound(); ToggleUI() end
     end)
 
-    -- KÉO UI
+    -- // FIX KÉO UI MOBILE: Chống giật/nhảy vị trí // --
     local function EnableDrag(obj)
         local dragging, dragInput, dragStart, startPos
+
         obj.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true; dragStart = input.Position; startPos = obj.Position
+            if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                dragging = true
+                dragStart = input.Position
+                startPos = obj.Position
+
                 input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                    end
                 end)
             end
         end)
+
         obj.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                 dragInput = input
             end
         end)
-        RunService.RenderStepped:Connect(function()
-            if dragging and dragInput then
-                local delta = dragInput.Position - dragStart
-                obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                obj.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
             end
         end)
     end
     EnableDrag(main); EnableDrag(openBtn)
 
-    -- SIDEBAR
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0, 35, 0, 180)
     sidebar.Position = UDim2.new(1, -40, 0.5, -90)
@@ -224,7 +231,6 @@ function Library:CreateWindow()
                 return box
             end
 
-            -- // USER BOX CÓ THÊM THANH BAR "PLAYER" // --
             local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0), "P\nL\nA\nY\nE\nR")
             local pfp = Instance.new("ImageLabel", userBox)
             pfp.Size = UDim2.new(0, 55, 0, 55)
@@ -234,7 +240,7 @@ function Library:CreateWindow()
             Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
 
             local greet = Instance.new("TextLabel", userBox)
-            greet.Size = UDim2.new(0.45, 0, 0.5, 0) -- Giảm width tí để ko đè lên bar
+            greet.Size = UDim2.new(0.45, 0, 0.5, 0)
             greet.Position = UDim2.new(0, 65, 0.2, 0)
             greet.Text = "konnichiwa. oniichan❤️~, \n" .. Players.LocalPlayer.DisplayName
             greet.Font = Enum.Font.GothamBold
@@ -303,7 +309,6 @@ function Library:CreateWindow()
     return Library
 end
 
--- --- TEST ---
 local win = Library:CreateWindow()
 local homeTab = win:CreateTab("Home", "H")
 homeTab:AddDashboard()
