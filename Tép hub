@@ -14,6 +14,32 @@ CleanupOldUI()
 
 local Library = {}
 
+-- Hàm hỗ trợ kéo thả (Draggable Function)
+local function MakeDraggable(frame, parent)
+    local dragging, dragInput, dragStart, startPos
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    frame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+
 function Library:CreateWindow()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "TOKAIHUB"
@@ -21,7 +47,7 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
-    -- // PHẦN ÂM THANH KHI BẬT HUB // --
+    -- Âm thanh
     local openSound = Instance.new("Sound")
     openSound.SoundId = "rbxassetid://90621979353525"
     openSound.Volume = 1
@@ -32,11 +58,9 @@ function Library:CreateWindow()
     local MainColor = Color3.fromRGB(255, 182, 193)
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink = Color3.fromRGB(235, 110, 140)
-
-    -- Biến trạng thái khóa UI
     local uiLocked = false
 
-    -- MAIN FRAME
+    -- // MAIN FRAME // --
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
     main.Size = UDim2.new(0, 364, 0, 240)
@@ -45,6 +69,7 @@ function Library:CreateWindow()
     main.BackgroundColor3 = MainColor
     main.BackgroundTransparency = 0.3
     main.Parent = screenGui
+    main.Visible = true -- Mặc định hiện
     
     Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
     local mainStroke = Instance.new("UIStroke", main)
@@ -52,16 +77,10 @@ function Library:CreateWindow()
     mainStroke.Thickness = 1.5
     mainStroke.Transparency = 0.6
 
-    -- KÉO UI (Draggable Logic)
+    -- Kéo cho Main Frame (có kiểm tra Lock)
     local dragging, dragInput, dragStart, startPos
-    local function update(input)
-        local delta = input.Position - dragStart
-        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
     main.InputBegan:Connect(function(input)
-        -- Kiểm tra nếu UI đang khóa thì không cho kéo
         if uiLocked then return end
-        
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
@@ -77,14 +96,45 @@ function Library:CreateWindow()
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then update(input) end
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
     end)
 
-    -- // TOOLBAR (THANH CÔNG CỤ: THOÁT & KHÓA) // --
+    -- // NÚT LOGO NỔI (TOGGLE BUTTON) // --
+    local toggleBtn = Instance.new("ImageButton")
+    toggleBtn.Name = "ToggleButton"
+    toggleBtn.Parent = screenGui
+    toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+    toggleBtn.Position = UDim2.new(0.1, 0, 0.1, 0) -- Vị trí ban đầu
+    toggleBtn.BackgroundColor3 = MainColor
+    toggleBtn.BackgroundTransparency = 0.2
+    toggleBtn.Image = "rbxassetid://126580068307553"
+    toggleBtn.ScaleType = Enum.ScaleType.Fit
+    
+    Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+    local btnStroke = Instance.new("UIStroke", toggleBtn)
+    btnStroke.Color = Color3.new(1,1,1)
+    btnStroke.Thickness = 2
+
+    -- Làm cho nút Logo có thể kéo
+    MakeDraggable(toggleBtn)
+
+    -- Click để ẩn/hiện Main Hub
+    toggleBtn.MouseButton1Click:Connect(function()
+        main.Visible = not main.Visible
+        -- Hiệu ứng nhỏ khi nhấn
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 45, 0, 45)}):Play()
+        task.wait(0.1)
+        TweenService:Create(toggleBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50)}):Play()
+    end)
+
+    -- // TOOLBAR // --
     local toolBar = Instance.new("Frame", main)
     toolBar.Name = "ToolBar"
     toolBar.Size = UDim2.new(0, 70, 0, 25)
-    toolBar.Position = UDim2.new(0, 10, 0, -30) -- Nằm phía trên Main Frame
+    toolBar.Position = UDim2.new(0, 10, 0, -30)
     toolBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     toolBar.BackgroundTransparency = 0.5
     Instance.new("UICorner", toolBar).CornerRadius = UDim.new(0, 8)
@@ -95,21 +145,17 @@ function Library:CreateWindow()
     toolLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     toolLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    -- Nút Khóa UI
     local lockBtn = Instance.new("TextButton", toolBar)
     lockBtn.Size = UDim2.new(0, 20, 0, 20)
     lockBtn.BackgroundTransparency = 1
-    lockBtn.Text = "🔓" -- Mặc định là mở khóa
+    lockBtn.Text = "🔓"
     lockBtn.TextSize = 12
-    
     lockBtn.MouseButton1Click:Connect(function()
         uiLocked = not uiLocked
         lockBtn.Text = uiLocked and "🔒" or "🔓"
-        -- Hiệu ứng đổi màu nhẹ để nhận biết
         lockBtn.TextColor3 = uiLocked and Color3.fromRGB(255, 0, 0) or Color3.new(1,1,1)
     end)
 
-    -- Nút Thoát (X)
     local closeBtn = Instance.new("TextButton", toolBar)
     closeBtn.Size = UDim2.new(0, 20, 0, 20)
     closeBtn.BackgroundTransparency = 1
@@ -117,13 +163,9 @@ function Library:CreateWindow()
     closeBtn.TextColor3 = Color3.fromRGB(255, 80, 80)
     closeBtn.Font = Enum.Font.GothamBold
     closeBtn.TextSize = 14
+    closeBtn.MouseButton1Click:Connect(function() screenGui:Destroy() end)
 
-    closeBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-    end)
-    -- // ------------------------- // --
-
-    -- Thanh Bar dưới cùng trang trí
+    -- Sidebar & Tabs (Giữ nguyên logic cũ của bạn)
     local bottomBar = Instance.new("Frame", main)
     bottomBar.Size = UDim2.new(0.9, 0, 0, 2)
     bottomBar.Position = UDim2.new(0.05, 0, 0.95, -5)
@@ -131,7 +173,6 @@ function Library:CreateWindow()
     bottomBar.BackgroundTransparency = 0.6
     Instance.new("UICorner", bottomBar)
 
-    -- SIDEBAR
     local sidebar = Instance.new("Frame", main)
     sidebar.Size = UDim2.new(0, 35, 0, 180)
     sidebar.Position = UDim2.new(1, -40, 0.5, -90)
@@ -186,7 +227,6 @@ function Library:CreateWindow()
 
         function elements:AddDashboard()
             layout:Destroy() 
-            
             local function CreateBox(size, pos, titleText)
                 local box = Instance.new("Frame", page)
                 box.Size = size
@@ -194,7 +234,6 @@ function Library:CreateWindow()
                 box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 box.BackgroundTransparency = 0.6
                 Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
-                
                 if titleText then
                     local bar = Instance.new("Frame", box)
                     bar.Size = UDim2.new(0, 18, 1, 0)
@@ -202,7 +241,6 @@ function Library:CreateWindow()
                     bar.BackgroundColor3 = DarkPink
                     bar.BackgroundTransparency = 0.2
                     Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 10)
-                    
                     local label = Instance.new("TextLabel", bar)
                     label.Size = UDim2.new(1, 0, 1, 0)
                     label.Text = titleText
@@ -248,7 +286,6 @@ function Library:CreateWindow()
             local musicBox = CreateBox(UDim2.new(0.35, 0, 0.47, 0), UDim2.new(0, 0, 0.53, 0), "M\nU\nS\nI\nC")
 
             local statBox = CreateBox(UDim2.new(0.62, 0, 0.47, 0), UDim2.new(0.38, 0, 0.53, 0), "S\nT\nA\nT\nU\nS")
-            
             local timeLabel = Instance.new("TextLabel", statBox)
             timeLabel.Size = UDim2.new(0, 80, 0, 25)
             timeLabel.Position = UDim2.new(0, 5, 0, 5)
@@ -270,24 +307,6 @@ function Library:CreateWindow()
             ampmLabel.TextSize = 8
             ampmLabel.Font = Enum.Font.GothamBold
             ampmLabel.BackgroundTransparency = 1
-
-            local utcLabel = Instance.new("TextLabel", statBox)
-            utcLabel.Size = UDim2.new(0, 60, 0, 10)
-            utcLabel.Position = UDim2.new(0, 5, 0, 28)
-            utcLabel.Text = "UTC+7 / GMT+7"
-            utcLabel.TextSize = 6
-            utcLabel.TextColor3 = DarkPink
-            utcLabel.BackgroundTransparency = 1
-            utcLabel.TextXAlignment = "Left"
-
-            local dateLabel = Instance.new("TextLabel", statBox)
-            dateLabel.Size = UDim2.new(0, 60, 0, 10)
-            dateLabel.Position = UDim2.new(0, 68, 0, 28)
-            dateLabel.Text = os.date("%b %d")
-            dateLabel.TextSize = 6
-            dateLabel.TextColor3 = TextColor
-            dateLabel.BackgroundTransparency = 1
-            dateLabel.TextXAlignment = "Left"
 
             local upStat = Instance.new("TextLabel", statBox)
             upStat.Size = UDim2.new(0, 60, 0, 12)
