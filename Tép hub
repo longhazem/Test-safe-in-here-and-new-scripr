@@ -1,1 +1,261 @@
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local Players = game:GetService("Players")
 
+local startTime = os.time()
+
+local function CleanupOldUI()
+    local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
+    if oldUI then oldUI:Destroy() end
+end
+CleanupOldUI()
+
+local Library = {}
+
+function Library:CreateWindow()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "TOKAIHUB"
+    screenGui.Parent = (gethui and gethui()) or game.CoreGui
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+
+    -- Âm thanh mở Menu
+    local openSound = Instance.new("Sound")
+    openSound.SoundId = "rbxassetid://90621979353525"
+    openSound.Volume = 1
+    openSound.Parent = SoundService
+    openSound:Play()
+    game:GetService("Debris"):AddItem(openSound, 5)
+
+    local MainColor = Color3.fromRGB(255, 182, 193)
+    local TextColor = Color3.fromRGB(90, 45, 55)
+    local DarkPink = Color3.fromRGB(235, 110, 140)
+
+    -- MAIN FRAME (Khung chứa nội dung)
+    local main = Instance.new("Frame")
+    main.Name = "MainFrame"
+    main.Size = UDim2.new(0, 364, 0, 240)
+    main.Position = UDim2.new(0.5, 20, 0.5, 0) -- Hơi lệch sang phải để nhường chỗ cho Sidebar
+    main.AnchorPoint = Vector2.new(0.5, 0.5)
+    main.BackgroundColor3 = MainColor
+    main.BackgroundTransparency = 0.3
+    main.Parent = screenGui
+    
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
+    local mainStroke = Instance.new("UIStroke", main)
+    mainStroke.Color = Color3.fromRGB(255, 255, 255)
+    mainStroke.Thickness = 1.5
+    mainStroke.Transparency = 0.6
+
+    -- SIDEBAR RIÊNG BIỆT (Thanh bên ngoài)
+    local sidebar = Instance.new("Frame")
+    sidebar.Name = "StandaloneSidebar"
+    sidebar.Size = UDim2.new(0, 45, 0, 280) -- Chiều cao dài hơn để giống ảnh
+    sidebar.Position = UDim2.new(0.5, -210, 0.5, 0) -- Nằm bên trái Main Frame
+    sidebar.AnchorPoint = Vector2.new(0.5, 0.5)
+    sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    sidebar.BackgroundTransparency = 0.7
+    sidebar.Parent = screenGui
+    
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(1, 0) -- Bo tròn cực đại
+    local sideStroke = Instance.new("UIStroke", sidebar)
+    sideStroke.Color = MainColor
+    sideStroke.Thickness = 2
+    sideStroke.Transparency = 0.5
+
+    local sideLayout = Instance.new("UIListLayout", sidebar)
+    sideLayout.Padding = UDim.new(0, 12)
+    sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    sideLayout.VerticalAlignment = Enum.VerticalAlignment.Top -- Bắt đầu từ trên xuống
+
+    -- Thêm Padding cho Sidebar để icon không dính sát mép trên
+    Instance.new("UIPadding", sidebar).PaddingTop = UDim.new(0, 15)
+
+    -- Logic kéo cho cả Main và Sidebar (đồng bộ hoặc riêng lẻ)
+    local function MakeDraggable(frame)
+        local dragging, dragInput, dragStart, startPos
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = frame.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        frame.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+                dragInput = input
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if input == dragInput and dragging then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
+    MakeDraggable(main)
+    MakeDraggable(sidebar)
+
+    local tabContainer = Instance.new("Frame", main)
+    tabContainer.Size = UDim2.new(0, 340, 0, 210)
+    tabContainer.Position = UDim2.new(0.5, 0, 0.5, 0)
+    tabContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+    tabContainer.BackgroundTransparency = 1
+
+    local pages = Instance.new("Frame", tabContainer)
+    pages.Size = UDim2.new(1, 0, 1, 0)
+    pages.BackgroundTransparency = 1
+
+    function Library:CreateTab(name, iconText)
+        local page = Instance.new("ScrollingFrame", pages)
+        page.Name = name .. "Page"
+        page.Size = UDim2.new(1, 0, 1, 0)
+        page.BackgroundTransparency = 1
+        page.Visible = false
+        page.ScrollBarThickness = 0
+        page.CanvasSize = UDim2.new(0, 0, 0, 0)
+        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+        local layout = Instance.new("UIGridLayout", page)
+        layout.CellSize = UDim2.new(0.48, 0, 0, 35)
+        layout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
+
+        -- Nút bấm trên Sidebar ngoài
+        local tabBtn = Instance.new("TextButton", sidebar)
+        tabBtn.Name = name .. "Btn"
+        tabBtn.Size = UDim2.new(0, 32, 0, 32)
+        tabBtn.BackgroundColor3 = DarkPink
+        tabBtn.BackgroundTransparency = 0.2
+        tabBtn.Text = iconText or name:sub(1,1)
+        tabBtn.TextScaled = true
+        tabBtn.Font = Enum.Font.GothamBold
+        tabBtn.TextColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
+
+        tabBtn.MouseButton1Click:Connect(function()
+            for _, v in pairs(pages:GetChildren()) do 
+                if v:IsA("ScrollingFrame") then v.Visible = false end 
+            end
+            page.Visible = true
+            
+            -- Hiệu ứng click nhẹ
+            local tween = TweenService:Create(tabBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 28, 0, 28)})
+            tween:Play()
+            tween.Completed:Connect(function()
+                tabBtn:TweenSize(UDim2.new(0, 32, 0, 32), "Out", "Back", 0.2)
+            end)
+        end)
+
+        local elements = {}
+
+        function elements:AddDashboard()
+            if page:FindFirstChildOfClass("UIGridLayout") then
+                page:FindFirstChildOfClass("UIGridLayout"):Destroy()
+            end
+            
+            local function CreateBox(size, pos, titleText)
+                local box = Instance.new("Frame", page)
+                box.Size = size
+                box.Position = pos
+                box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                box.BackgroundTransparency = 0.6
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
+                
+                if titleText then
+                    local bar = Instance.new("Frame", box)
+                    bar.Size = UDim2.new(0, 18, 1, 0)
+                    bar.Position = UDim2.new(1, -18, 0, 0)
+                    bar.BackgroundColor3 = DarkPink
+                    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 10)
+                    
+                    local label = Instance.new("TextLabel", bar)
+                    label.Size = UDim2.new(1, 0, 1, 0)
+                    label.Text = titleText
+                    label.Font = Enum.Font.GothamBold
+                    label.TextColor3 = Color3.new(1, 1, 1)
+                    label.TextSize = 7
+                    label.TextWrapped = true
+                    label.BackgroundTransparency = 1
+                end
+                return box
+            end
+
+            -- Dashboard Elements (Giữ nguyên logic của bạn)
+            local userBox = CreateBox(UDim2.new(0.6, 0, 0.47, 0), UDim2.new(0, 0, 0, 0))
+            local pfp = Instance.new("ImageLabel", userBox)
+            pfp.Size = UDim2.new(0, 50, 0, 50)
+            pfp.Position = UDim2.new(0, 5, 0.5, -25)
+            pfp.Image = Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            pfp.BackgroundTransparency = 1
+            Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
+
+            local greet = Instance.new("TextLabel", userBox)
+            greet.Size = UDim2.new(0.5, 0, 0.5, 0)
+            greet.Position = UDim2.new(0, 60, 0.2, 0)
+            greet.Text = "Chào Oniichan,\n" .. Players.LocalPlayer.DisplayName
+            greet.Font = Enum.Font.GothamBold
+            greet.TextColor3 = TextColor
+            greet.TextSize = 9
+            greet.TextXAlignment = "Left"
+            greet.BackgroundTransparency = 1
+
+            local statBox = CreateBox(UDim2.new(0.62, 0, 0.47, 0), UDim2.new(0.38, 0, 0.53, 0), "S\nT\nA\nT\nU\nS")
+            local timeLabel = Instance.new("TextLabel", statBox)
+            timeLabel.Size = UDim2.new(1, -10, 0, 25)
+            timeLabel.Position = UDim2.new(0, 5, 0, 5)
+            timeLabel.Font = Enum.Font.GothamBold
+            timeLabel.TextSize = 16
+            timeLabel.TextColor3 = TextColor
+            timeLabel.BackgroundTransparency = 1
+            timeLabel.TextXAlignment = "Left"
+
+            task.spawn(function()
+                while task.wait(1) do
+                    timeLabel.Text = os.date("%I:%M:%S %p")
+                end
+            end)
+        end
+        
+        function elements:AddButton(text, callback)
+            local btn = Instance.new("TextButton", page)
+            btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            btn.BackgroundTransparency = 0.5
+            btn.Text = "  " .. text
+            btn.Font = Enum.Font.GothamSemibold
+            btn.TextColor3 = TextColor
+            btn.TextSize = 10
+            btn.TextXAlignment = "Left"
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+            btn.MouseButton1Click:Connect(callback)
+        end
+        
+        if #sidebar:GetChildren() <= 3 then -- Auto show first tab (accounting for Layout/Padding)
+            page.Visible = true 
+        end
+        return elements
+    end
+
+    return Library
+end
+
+-- --- SỬ DỤNG ---
+local win = Library:CreateWindow()
+
+-- Tab Home (Chữ H)
+local homeTab = win:CreateTab("Home", "H")
+homeTab:AddDashboard()
+
+-- Tab Main (Chữ M)
+local mainTab = win:CreateTab("Main", "M")
+mainTab:AddButton("Kích hoạt Auto Farm", function() print("Auto Farm On") end)
+mainTab:AddButton("Dọn dẹp túi đồ", function() print("Cleaning...") end)
+
+-- Bạn có thể thêm các Tab khác như S, +, U, G để lấp đầy thanh Sidebar như trong ảnh
+win:CreateTab("Settings", "S")
+win:CreateTab("Add", "+")
+win:CreateTab("Profile", "U")
