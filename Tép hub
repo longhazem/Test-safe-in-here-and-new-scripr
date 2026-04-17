@@ -6,7 +6,7 @@ local Players = game:GetService("Players")
 
 local startTime = os.time()
 _G.ToggleKey = Enum.KeyCode.RightControl
-local isLocked = false -- Trạng thái khóa kéo UI
+local isLocked = false
 
 local function CleanupOldUI()
     local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
@@ -56,19 +56,18 @@ function Library:CreateWindow()
 
     local main = Instance.new("Frame")
     main.Name = "MainFrame"
-    main.Size = UDim2.new(0, 364, 0, 240)
+    main.Size = UDim2.new(0, 420, 0, 260)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = MainColor
     main.BackgroundTransparency = 0.3
     main.Parent = screenGui
-    main.ClipsDescendants = false -- Đổi thành false để toolbar lòi ra ngoài được
+    main.ClipsDescendants = false
     
     Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
     local mainStroke = Instance.new("UIStroke", main)
     mainStroke.Thickness = 2
 
-    -- // TOOLBAR FEATURES (PHẦN THÊM MỚI) // --
     local toolbar = Instance.new("Frame", main)
     toolbar.Size = UDim2.new(0, 30, 0, 95)
     toolbar.Position = UDim2.new(1, 5, 0, 10)
@@ -97,7 +96,6 @@ function Library:CreateWindow()
     local lockBtn = CreateToolBtn("🔓", Color3.fromRGB(80, 200, 80))
     local keyBtn = CreateToolBtn("⌨", DarkPink)
 
-    -- // LOGIC CHO TOOLBAR // --
     local isToggling = false
     local function ToggleUI()
         if isToggling then return end
@@ -114,7 +112,7 @@ function Library:CreateWindow()
             openBtn.Visible = false
             main.Visible = true
             main.Size = UDim2.new(0, 0, 0, 0)
-            local tw = TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 364, 0, 240)})
+            local tw = TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 420, 0, 260)})
             tw:Play()
             tw.Completed:Connect(function() isToggling = false end)
         end
@@ -170,11 +168,10 @@ function Library:CreateWindow()
         if not gpe and input.KeyCode == _G.ToggleKey then PlayClickSound(); ToggleUI() end
     end)
 
-    -- // FIX KÉO UI MOBILE: Có hỗ trợ Lock // --
     local function EnableDrag(obj)
         local dragging, dragInput, dragStart, startPos
         obj.InputBegan:Connect(function(input)
-            if isLocked then return end -- Không kéo nếu đang khóa
+            if isLocked then return end
             if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                 dragging = true
                 dragStart = input.Position
@@ -200,27 +197,27 @@ function Library:CreateWindow()
     EnableDrag(main); EnableDrag(openBtn)
 
     local sidebar = Instance.new("Frame", main)
-    sidebar.Size = UDim2.new(0, 35, 0, 180)
-    sidebar.Position = UDim2.new(1, -40, 0.5, -90)
+    sidebar.Size = UDim2.new(0, 75, 0, 230)
+    sidebar.Position = UDim2.new(0, 5, 0.5, -115)
     sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     sidebar.BackgroundTransparency = 0.7
-    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(1, 0)
+    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(0, 10)
 
     local sideLayout = Instance.new("UIListLayout", sidebar)
-    sideLayout.Padding = UDim.new(0, 8)
+    sideLayout.Padding = UDim.new(0, 5)
     sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
     local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0, 310, 0, 200)
-    tabContainer.Position = UDim2.new(0, 10, 0, 15)
+    tabContainer.Size = UDim2.new(0, 325, 0, 230)
+    tabContainer.Position = UDim2.new(0, 85, 0, 15)
     tabContainer.BackgroundTransparency = 1
 
     local pages = Instance.new("Frame", tabContainer)
     pages.Size = UDim2.new(1, 0, 1, 0)
     pages.BackgroundTransparency = 1
 
-    function Library:CreateTab(name, iconText)
+    function Library:CreateTab(name)
         local page = Instance.new("ScrollingFrame", pages)
         page.Name = name .. "Page"
         page.Size = UDim2.new(1, 0, 1, 0)
@@ -235,14 +232,14 @@ function Library:CreateWindow()
         layout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
 
         local tabBtn = Instance.new("TextButton", sidebar)
-        tabBtn.Size = UDim2.new(0, 28, 0, 28)
+        tabBtn.Size = UDim2.new(0, 65, 0, 28)
         tabBtn.BackgroundColor3 = DarkPink
         tabBtn.BackgroundTransparency = 0.2
-        tabBtn.Text = iconText or name:sub(1,1)
-        tabBtn.TextScaled = true
+        tabBtn.Text = name
         tabBtn.Font = Enum.Font.GothamBold
         tabBtn.TextColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1, 0)
+        tabBtn.TextSize = 11
+        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 5)
 
         tabBtn.MouseButton1Click:Connect(function()
             PlayClickSound()
@@ -252,7 +249,6 @@ function Library:CreateWindow()
 
         local elements = {}
 
-        -- // GIỮ NGUYÊN PHẦN HOME DASHBOARD NHƯ YÊU CẦU // --
         function elements:AddDashboard()
             layout:Destroy() 
             
@@ -363,8 +359,29 @@ function Library:CreateWindow()
 end
 
 local win = Library:CreateWindow()
-local homeTab = win:CreateTab("Home", "H")
+
+local homeTab = win:CreateTab("Home")
 homeTab:AddDashboard()
 
-local mainTab = win:CreateTab("Main", "M")
-mainTab:AddButton("Test Button", function() print("Clicked") end)
+local mainTab = win:CreateTab("Main")
+mainTab:AddButton("Example Feature", function() print("Main Active") end)
+
+local missTab = win:CreateTab("Miss")
+missTab:AddButton("Auto Task", function() print("Miss Task Active") end)
+
+local charterTab = win:CreateTab("Charter")
+charterTab:AddButton("Speed Up", function() 
+    if Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
+        Players.LocalPlayer.Character.Humanoid.WalkSpeed = 50
+    end
+end)
+
+local vielsTab = win:CreateTab("Visuals")
+vielsTab:AddButton("Enable ESP", function() print("ESP Enabled") end)
+vielsTab:AddButton("Fullbright", function() 
+    game:GetService("Lighting").Brightness = 2
+    game:GetService("Lighting").ClockTime = 14
+end)
+
+local settingTab = win:CreateTab("Setting")
+settingTab:AddButton("Unload UI", function() CleanupOldUI() end)
