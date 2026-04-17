@@ -376,61 +376,62 @@ function Library:CreateWindow()
                 nil, nil
             )
 
-            local timeLabel = Instance.new("TextLabel", clockBox)
-            timeLabel.Size = UDim2.new(0.68, 0, 0.42, 0)
-            timeLabel.Position = UDim2.new(0.03, 0, 0.04, 0)
+            -- Time row: [HH:MM:SS] [AM/PM badge] — side by side using pixel layout
+            local timeRow = Instance.new("Frame", clockBox)
+            timeRow.Size = UDim2.new(1, -8, 0, 26)
+            timeRow.Position = UDim2.new(0, 6, 0, 5)
+            timeRow.BackgroundTransparency = 1
+            local timeRowLayout = Instance.new("UIListLayout", timeRow)
+            timeRowLayout.FillDirection = Enum.FillDirection.Horizontal
+            timeRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            timeRowLayout.Padding = UDim.new(0, 4)
+
+            local timeLabel = Instance.new("TextLabel", timeRow)
+            timeLabel.Size = UDim2.new(0, 130, 1, 0)
             timeLabel.Font = Enum.Font.GothamBold
-            timeLabel.TextSize = 22
+            timeLabel.TextSize = 20
             timeLabel.TextColor3 = TextColor
             timeLabel.BackgroundTransparency = 1
             timeLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-            local ampmBox = Instance.new("Frame", clockBox)
-            ampmBox.Size = UDim2.new(0, 22, 0, 11)
-            ampmBox.Position = UDim2.new(0.73, 0, 0.08, 0)
+            local ampmBox = Instance.new("Frame", timeRow)
+            ampmBox.Size = UDim2.new(0, 22, 0, 13)
             ampmBox.BackgroundColor3 = DarkPink
-            Instance.new("UICorner", ampmBox).CornerRadius = UDim.new(0,4)
+            Instance.new("UICorner", ampmBox).CornerRadius = UDim.new(0, 4)
             local ampmLabel = Instance.new("TextLabel", ampmBox)
-            ampmLabel.Size = UDim2.new(1,0,1,0)
+            ampmLabel.Size = UDim2.new(1, 0, 1, 0)
             ampmLabel.Text = "PM"
-            ampmLabel.TextColor3 = Color3.new(1,1,1)
+            ampmLabel.TextColor3 = Color3.new(1, 1, 1)
             ampmLabel.TextSize = 8
             ampmLabel.Font = Enum.Font.GothamBold
             ampmLabel.BackgroundTransparency = 1
 
-            local utcLabel = Instance.new("TextLabel", clockBox)
-            utcLabel.Size = UDim2.new(0.48, 0, 0.2, 0)
-            utcLabel.Position = UDim2.new(0.03, 0, 0.48, 0)
-            utcLabel.Text = "UTC+8 / GMT+8"
-            utcLabel.TextSize = 6
-            utcLabel.TextColor3 = DarkPink
-            utcLabel.BackgroundTransparency = 1
-            utcLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            local dateLabel = Instance.new("TextLabel", clockBox)
-            dateLabel.Size = UDim2.new(0.5, 0, 0.2, 0)
-            dateLabel.Position = UDim2.new(0.5, 0, 0.48, 0)
-            dateLabel.Text = os.date("%A, %B %d")
-            dateLabel.TextSize = 6
-            dateLabel.TextColor3 = TextColor
-            dateLabel.BackgroundTransparency = 1
-            dateLabel.TextXAlignment = Enum.TextXAlignment.Right
+            -- UTC + Date on one line
+            local infoLabel = Instance.new("TextLabel", clockBox)
+            infoLabel.Size = UDim2.new(1, -8, 0, 14)
+            infoLabel.Position = UDim2.new(0, 6, 0, 34)
+            infoLabel.Text = "UTC+8 / GMT+8   |   " .. os.date("%A, %B %d")
+            infoLabel.TextSize = 7
+            infoLabel.Font = Enum.Font.Gotham
+            infoLabel.TextColor3 = DarkPink
+            infoLabel.BackgroundTransparency = 1
+            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 
             local statLine = Instance.new("TextLabel", clockBox)
-            statLine.Size = UDim2.new(0.93, 0, 0.2, 0)
-            statLine.Position = UDim2.new(0.03, 0, 0.7, 0)
+            statLine.Size = UDim2.new(1, -8, 0, 13)
+            statLine.Position = UDim2.new(0, 6, 0, 50)
             statLine.Text = "Exec: 1   Up: 0m 0s   Sess: 0s"
-            statLine.TextSize = 6
+            statLine.TextSize = 7
             statLine.Font = Enum.Font.GothamBold
             statLine.TextColor3 = TextColor
             statLine.BackgroundTransparency = 1
             statLine.TextXAlignment = Enum.TextXAlignment.Left
 
             local viaLabel = Instance.new("TextLabel", clockBox)
-            viaLabel.Size = UDim2.new(0.93, 0, 0.18, 0)
-            viaLabel.Position = UDim2.new(0.03, 0, 0.85, 0)
+            viaLabel.Size = UDim2.new(1, -8, 0, 12)
+            viaLabel.Position = UDim2.new(0, 6, 0, 65)
             viaLabel.Text = "via TokaiHub"
-            viaLabel.TextSize = 6
+            viaLabel.TextSize = 7
             viaLabel.Font = Enum.Font.Gotham
             viaLabel.TextColor3 = DarkPink
             viaLabel.BackgroundTransparency = 1
@@ -464,7 +465,7 @@ function Library:CreateWindow()
                 while task.wait(1) do
                     timeLabel.Text = os.date("%I:%M:%S")
                     ampmLabel.Text = os.date("%p")
-                    dateLabel.Text = os.date("%A, %B %d")
+                    infoLabel.Text = "UTC+8 / GMT+8   |   " .. os.date("%A, %B %d")
                     local diff = os.time() - startTime
                     local sess = os.time() - sessStart
                     local execN = math.floor(diff / 12) % 8 + 1
