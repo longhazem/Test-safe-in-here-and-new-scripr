@@ -1,14 +1,14 @@
--- ╔═══════════════════════════════════════╗
--- ║     TokaiHub — Roblox UI Library      ║
--- ║  Auto-Save · Sliders · Toggles · Anim ║
--- ╚═══════════════════════════════════════╝
+-- ╔══════════════════════════════════════════════════╗
+-- ║           TokaiHub — Roblox UI Library           ║
+-- ║  Volt · Potassium · Synapse Z · Volcano · Wave   ║
+-- ║  Delta · Codex · Seliwar · Solar · Xeno + more   ║
+-- ╚══════════════════════════════════════════════════╝
 
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local SoundService     = game:GetService("SoundService")
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
-local HttpService      = game:GetService("HttpService")
 local Camera           = workspace.CurrentCamera
 
 local startTime = os.time()
@@ -16,27 +16,104 @@ _G.ToggleKey   = Enum.KeyCode.RightControl
 local isLocked = false
 local DISCORD  = "https://discord.gg/nn783R2fK2"
 
--- ═══════════════ AUTO-SAVE SYSTEM ═══════════════
-local SAVE_FILE = "TokaiHubSave.json"
-local DEFAULT   = { fov = 70, speed = 16, noclip = false, fullbright = false, infiniteJump = false, noFog = false }
+-- ═══════════════════════════════════════════════
+--  EXECUTOR COMPATIBILITY LAYER
+--  Supports: Volt, Potassium, Synapse Z, Volcano,
+--            Wave, Delta, Codex, Seliwar, Solar, Xeno
+-- ═══════════════════════════════════════════════
 
-local function LoadSettings()
-    if isfile and readfile and isfile(SAVE_FILE) then
-        local ok, d = pcall(function() return HttpService:JSONDecode(readfile(SAVE_FILE)) end)
-        if ok and type(d) == "table" then
-            for k, v in pairs(DEFAULT) do if d[k] == nil then d[k] = v end end
-            return d
-        end
+-- GUI parent: tries gethui (Synapse Z, Volt, Wave, Codex),
+-- then CoreGui (Delta, Xeno, Solar), then PlayerGui (fallback)
+local function GetGuiParent()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
     end
-    local copy = {}; for k,v in pairs(DEFAULT) do copy[k] = v end; return copy
+    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
+    if ok and cg then return cg end
+    -- Mobile fallback: Potassium, Seliwar, Volcano
+    return Players.LocalPlayer:WaitForChild("PlayerGui", 5)
+        or Players.LocalPlayer.PlayerGui
 end
 
-local S = LoadSettings()   -- S = current settings (persisted)
+-- Clipboard: setclipboard (most), toclipboard (Seliwar/Solar),
+-- Clipboard.set (some mobile), silent fail otherwise
+local function SafeCopy(text)
+    if setclipboard then
+        pcall(setclipboard, text); return
+    end
+    if toclipboard then
+        pcall(toclipboard, text); return
+    end
+    if Clipboard and Clipboard.set then
+        pcall(function() Clipboard.set(text) end); return
+    end
+    -- Xeno / Solar last attempt
+    if syn and syn.write_clipboard then
+        pcall(syn.write_clipboard, text)
+    end
+end
+
+-- File I/O: most executors support writefile/readfile.
+-- Uses pcall everywhere so it never crashes on unsupported executors.
+local SAVE_FILE = "TokaiHubSave.json"
+
+local function SafeWrite(name, content)
+    pcall(function()
+        if writefile then writefile(name, content) end
+    end)
+end
+
+local function SafeRead(name)
+    local ok, data = pcall(function()
+        if not isfile or not readfile then return nil end
+        if not isfile(name) then return nil end
+        return readfile(name)
+    end)
+    return (ok and type(data) == "string") and data or nil
+end
+
+-- Simple JSON-like serializer (no HttpService dependency)
+-- Handles flat tables with string keys and bool/number values
+local function Serialize(t)
+    local parts = {}
+    for k, v in pairs(t) do
+        local vs = type(v) == "boolean" and (v and "true" or "false") or tostring(v)
+        table.insert(parts, k .. "=" .. vs)
+    end
+    return table.concat(parts, ";")
+end
+
+local function Deserialize(s, default)
+    local t = {}
+    for k, v in pairs(default) do t[k] = v end  -- copy defaults
+    if not s or s == "" then return t end
+    for pair in s:gmatch("([^;]+)") do
+        local k, v = pair:match("^(.-)=(.+)$")
+        if k and v then
+            if v == "true"  then t[k] = true
+            elseif v == "false" then t[k] = false
+            else
+                local n = tonumber(v)
+                if n then t[k] = n end
+            end
+        end
+    end
+    return t
+end
+
+-- ═══════════════ AUTO-SAVE SYSTEM ═══════════════
+local DEFAULT = { fov = 70, speed = 16, noclip = false, fullbright = false, infiniteJump = false }
+
+local function LoadSettings()
+    local raw = SafeRead(SAVE_FILE)
+    return Deserialize(raw, DEFAULT)
+end
+
+local S = LoadSettings()
 
 local function Save()
-    pcall(function()
-        if writefile then writefile(SAVE_FILE, HttpService:JSONEncode(S)) end
-    end)
+    SafeWrite(SAVE_FILE, Serialize(S))
 end
 
 -- ═══════════════ APPLY SAVED FEATURES ═══════════════
@@ -118,7 +195,7 @@ end)
 
 -- ═══════════════ CLEANUP ═══════════════
 local function CleanupOldUI()
-    local gui = (gethui and gethui()) or game.CoreGui
+    local gui = GetGuiParent()
     local old = gui:FindFirstChild("TOKAIHUB")
     if old then old:Destroy() end
 end
@@ -135,7 +212,7 @@ local Library = {}
 function Library:CreateWindow()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "TOKAIHUB"
-    screenGui.Parent = (gethui and gethui()) or game.CoreGui
+    screenGui.Parent = GetGuiParent()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
@@ -159,9 +236,14 @@ function Library:CreateWindow()
     Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1,0)
     local openStroke = Instance.new("UIStroke", openBtn); openStroke.Thickness = 3
 
+    -- Responsive size: fits 360–612px wide screens
+    local screenW = Camera.ViewportSize.X
+    local FRAME_W = math.clamp(math.floor(screenW * 0.88), 300, 390)
+    local FRAME_H = 240
+
     -- Main frame
     local main = Instance.new("Frame")
-    main.Name = "MainFrame"; main.Size = UDim2.new(0,390,0,240)
+    main.Name = "MainFrame"; main.Size = UDim2.new(0, FRAME_W, 0, FRAME_H)
     main.Position = UDim2.new(0.5,0,0.5,0); main.AnchorPoint = Vector2.new(0.5,0.5)
     main.BackgroundColor3 = MainColor; main.BackgroundTransparency = 0.3
     main.Parent = screenGui; main.ClipsDescendants = false
@@ -198,7 +280,7 @@ function Library:CreateWindow()
             task.delay(0.4, function() main.Visible=false; openBtn.Visible=true; isTweening=false end)
         else
             openBtn.Visible=false; main.Visible=true; main.Size=UDim2.new(0,0,0,0)
-            local tw = TweenService:Create(main, TweenInfo.new(0.5,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,390,0,240)})
+            local tw = TweenService:Create(main, TweenInfo.new(0.5,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,FRAME_W,0,FRAME_H)})
             tw:Play(); tw.Completed:Connect(function() isTweening=false end)
         end
     end
@@ -357,9 +439,12 @@ function Library:CreateWindow()
     local function MakeSlider(parent, labelText, yPos, min, max, savedKey, suffix, onCallback)
         local value = S[savedKey] or min
 
+        local KNOB_W = 13  -- knob pixel width
+
         local row = Instance.new("Frame", parent)
-        row.Size = UDim2.new(1,-4,0,38); row.Position = UDim2.new(0,2,0,yPos)
+        row.Size = UDim2.new(1,-4,0,40); row.Position = UDim2.new(0,2,0,yPos)
         row.BackgroundColor3 = Color3.fromRGB(255,255,255); row.BackgroundTransparency = 0.45
+        row.ClipsDescendants = false  -- allow knob to overflow without clipping
         Instance.new("UICorner", row).CornerRadius = UDim.new(0,7)
 
         local lbl = Instance.new("TextLabel", row)
@@ -374,19 +459,26 @@ function Library:CreateWindow()
         valLbl.TextColor3 = DarkPink; valLbl.TextSize = 9
         valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.BackgroundTransparency = 1
 
-        -- Track
+        -- Track (shrunk by KNOB_W/2 on each side so knob stays fully visible)
+        local TRACK_PAD = 8 + math.ceil(KNOB_W / 2)
         local track = Instance.new("Frame", row)
-        track.Size = UDim2.new(1,-16,0,6); track.Position = UDim2.new(0,8,0,24)
+        track.Size = UDim2.new(1, -(TRACK_PAD * 2), 0, 6)
+        track.Position = UDim2.new(0, TRACK_PAD, 0, 27)
         track.BackgroundColor3 = Color3.fromRGB(220,190,200)
+        track.ClipsDescendants = false  -- knob overflows track vertically
         Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
 
         local fill = Instance.new("Frame", track)
-        fill.Size = UDim2.new((value-min)/(max-min),0,1,0); fill.Position = UDim2.new(0,0,0,0)
+        fill.Size = UDim2.new((value-min)/(max-min), 0, 1, 0)
+        fill.Position = UDim2.new(0,0,0,0)
         fill.BackgroundColor3 = DarkPink
         Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
 
+        -- Knob: offset by -pct*KNOB_W so it stays within track at all values
+        local initPct = (value-min)/(max-min)
         local knob = Instance.new("Frame", track)
-        knob.Size = UDim2.new(0,13,0,13); knob.Position = UDim2.new((value-min)/(max-min),0,0.5,-6)
+        knob.Size = UDim2.new(0, KNOB_W, 0, KNOB_W)
+        knob.Position = UDim2.new(initPct, -math.floor(KNOB_W * initPct), 0.5, -math.ceil(KNOB_W/2))
         knob.BackgroundColor3 = Color3.new(1,1,1)
         Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
         local ks = Instance.new("UIStroke", knob); ks.Color = DarkPink; ks.Thickness = 1.5
@@ -399,8 +491,9 @@ function Library:CreateWindow()
             value = math.floor(min + pct*(max-min))
             S[savedKey] = value; Save()
             valLbl.Text = tostring(value)..suffix
-            fill.Size = UDim2.new(pct,0,1,0)
-            knob.Position = UDim2.new(pct,0,0.5,-6)
+            fill.Size = UDim2.new(pct, 0, 1, 0)
+            -- Offset knob so its center tracks the fill end without overflowing
+            knob.Position = UDim2.new(pct, -math.floor(KNOB_W * pct), 0.5, -math.ceil(KNOB_W/2))
             if onCallback then onCallback(value) end
         end
 
@@ -500,7 +593,7 @@ function Library:CreateWindow()
             dcBtn.TextSize=7; Instance.new("UICorner",dcBtn).CornerRadius=UDim.new(0,5)
             dcBtn.MouseButton1Click:Connect(function()
                 PlayClickSound()
-                if setclipboard then setclipboard(DISCORD) end
+                SafeCopy(DISCORD)
                 dcBtn.Text="✓ Copied!"
                 task.delay(2, function() dcBtn.Text="💬 discord.gg/nn783R2fK2" end)
             end)
@@ -552,7 +645,7 @@ function Library:CreateWindow()
         -- AddSlider (draggable, auto-save)
         function elements:AddSlider(text, min, max, savedKey, suffix, callback)
             MakeSlider(page, text, yOffset, min, max, savedKey, suffix or "", callback)
-            yOffset = yOffset + 42
+            yOffset = yOffset + 44
         end
 
         -- AddSection label
@@ -584,7 +677,7 @@ homeTab:AddDashboard()
 local mainTab = win:CreateTab("Main", "M")
 mainTab:AddSection("Test Buttons")
 mainTab:AddButton("🔔 Noti Test", function()
-    local sg = Instance.new("ScreenGui", (gethui and gethui()) or game.CoreGui)
+    local sg = Instance.new("ScreenGui", GetGuiParent())
     sg.IgnoreGuiInset = true
     local f = Instance.new("Frame", sg); f.Size=UDim2.new(0,200,0,36)
     f.Position=UDim2.new(0.5,-100,0,80); f.BackgroundColor3=Color3.fromRGB(235,110,140)
@@ -598,7 +691,7 @@ mainTab:AddButton("💨 Reset Character", function()
     Players.LocalPlayer:LoadCharacter()
 end)
 mainTab:AddButton("📋 Copy Username", function()
-    if setclipboard then setclipboard(Players.LocalPlayer.Name) end
+    SafeCopy(Players.LocalPlayer.Name)
 end)
 mainTab:AddButton("🌐 Print Game Info", function()
     print("Game ID:", game.PlaceId, "| Player:", Players.LocalPlayer.Name)
