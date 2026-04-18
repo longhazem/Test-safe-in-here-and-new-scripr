@@ -1,32 +1,135 @@
--- // TokaiHub - Roblox UI Library // --
--- // Pink Genshin-inspired aesthetic // --
+-- ╔═══════════════════════════════════════╗
+-- ║     TokaiHub — Roblox UI Library      ║
+-- ║  Auto-Save · Sliders · Toggles · Anim ║
+-- ╚═══════════════════════════════════════╝
 
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local SoundService = game:GetService("SoundService")
-local Players = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local SoundService     = game:GetService("SoundService")
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local HttpService      = game:GetService("HttpService")
+local Camera           = workspace.CurrentCamera
 
 local startTime = os.time()
-_G.ToggleKey = Enum.KeyCode.RightControl
+_G.ToggleKey   = Enum.KeyCode.RightControl
 local isLocked = false
+local DISCORD  = "https://discord.gg/nn783R2fK2"
 
-local DISCORD = "https://discord.gg/nn783R2fK2"
+-- ═══════════════ AUTO-SAVE SYSTEM ═══════════════
+local SAVE_FILE = "TokaiHubSave.json"
+local DEFAULT   = { fov = 70, speed = 16, noclip = false, fullbright = false, infiniteJump = false, noFog = false }
 
+local function LoadSettings()
+    if isfile and readfile and isfile(SAVE_FILE) then
+        local ok, d = pcall(function() return HttpService:JSONDecode(readfile(SAVE_FILE)) end)
+        if ok and type(d) == "table" then
+            for k, v in pairs(DEFAULT) do if d[k] == nil then d[k] = v end end
+            return d
+        end
+    end
+    local copy = {}; for k,v in pairs(DEFAULT) do copy[k] = v end; return copy
+end
+
+local S = LoadSettings()   -- S = current settings (persisted)
+
+local function Save()
+    pcall(function()
+        if writefile then writefile(SAVE_FILE, HttpService:JSONEncode(S)) end
+    end)
+end
+
+-- ═══════════════ APPLY SAVED FEATURES ═══════════════
+local noclipConn, infiniteJumpConn, fullbrightConn
+
+local function ApplyFOV()   Camera.FieldOfView = S.fov end
+local function ApplySpeed()
+    local char = Players.LocalPlayer.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = S.speed end
+    end
+end
+
+local function ApplyNoclip(state)
+    if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+    if state then
+        noclipConn = RunService.Stepped:Connect(function()
+            local char = Players.LocalPlayer.Character
+            if char then
+                for _, p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            end
+        end)
+    else
+        local char = Players.LocalPlayer.Character
+        if char then
+            for _, p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = true end
+            end
+        end
+    end
+end
+
+local function ApplyFullbright(state)
+    if fullbrightConn then fullbrightConn:Disconnect(); fullbrightConn = nil end
+    local lighting = game:GetService("Lighting")
+    if state then
+        lighting.Brightness = 10
+        lighting.ClockTime = 14
+        fullbrightConn = RunService.Heartbeat:Connect(function()
+            lighting.Brightness = 10
+            lighting.ClockTime = 14
+        end)
+    end
+end
+
+local function ApplyInfiniteJump(state)
+    if infiniteJumpConn then infiniteJumpConn:Disconnect(); infiniteJumpConn = nil end
+    if state then
+        infiniteJumpConn = UserInputService.JumpRequest:Connect(function()
+            local char = Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChild("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end)
+    end
+end
+
+-- Apply saved settings on load
+task.spawn(function()
+    task.wait(1)
+    ApplyFOV()
+    ApplySpeed()
+    if S.noclip       then ApplyNoclip(true) end
+    if S.fullbright   then ApplyFullbright(true) end
+    if S.infiniteJump then ApplyInfiniteJump(true) end
+end)
+
+-- Re-apply speed on character respawn
+Players.LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    ApplySpeed()
+    ApplyFOV()
+    if S.noclip       then ApplyNoclip(true) end
+    if S.infiniteJump then ApplyInfiniteJump(true) end
+    if S.fullbright   then ApplyFullbright(true) end
+end)
+
+-- ═══════════════ CLEANUP ═══════════════
 local function CleanupOldUI()
-    local oldUI = (gethui and gethui():FindFirstChild("TOKAIHUB")) or game.CoreGui:FindFirstChild("TOKAIHUB")
-    if oldUI then oldUI:Destroy() end
+    local gui = (gethui and gethui()) or game.CoreGui
+    local old = gui:FindFirstChild("TOKAIHUB")
+    if old then old:Destroy() end
 end
 CleanupOldUI()
 
 local function PlayClickSound()
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://126347354635406"
-    sound.Volume = 0.6
-    sound.Parent = SoundService
-    sound:Play()
-    game:GetService("Debris"):AddItem(sound, 2)
+    local s = Instance.new("Sound"); s.SoundId = "rbxassetid://126347354635406"; s.Volume = 0.6
+    s.Parent = SoundService; s:Play(); game:GetService("Debris"):AddItem(s, 2)
 end
 
+-- ═══════════════ UI LIBRARY ═══════════════
 local Library = {}
 
 function Library:CreateWindow()
@@ -36,99 +139,73 @@ function Library:CreateWindow()
     screenGui.ResetOnSpawn = false
     screenGui.IgnoreGuiInset = true
 
-    local openSound = Instance.new("Sound")
-    openSound.SoundId = "rbxassetid://90621979353525"
-    openSound.Volume = 1
-    openSound.Parent = SoundService
-    openSound:Play()
-    game:GetService("Debris"):AddItem(openSound, 5)
+    do  -- open sound
+        local os2 = Instance.new("Sound"); os2.SoundId = "rbxassetid://90621979353525"; os2.Volume = 1
+        os2.Parent = SoundService; os2:Play(); game:GetService("Debris"):AddItem(os2, 5)
+    end
 
     local MainColor = Color3.fromRGB(255, 182, 193)
     local TextColor = Color3.fromRGB(90, 45, 55)
     local DarkPink  = Color3.fromRGB(235, 110, 140)
-    local LightPink = Color3.fromRGB(220, 180, 190)
+    local Green     = Color3.fromRGB(34, 197, 94)
+    local Gray      = Color3.fromRGB(160, 160, 160)
 
-    -- Open Button
+    -- Open button
     local openBtn = Instance.new("ImageButton", screenGui)
-    openBtn.Name = "OpenButton"
-    openBtn.Size = UDim2.new(0, 50, 0, 50)
-    openBtn.Position = UDim2.new(0, 10, 0.5, -25)
-    openBtn.BackgroundColor3 = MainColor
+    openBtn.Name = "OpenButton"; openBtn.Size = UDim2.new(0,50,0,50)
+    openBtn.Position = UDim2.new(0,10,0.5,-25); openBtn.BackgroundColor3 = MainColor
     openBtn.Image = "rbxthumb://type=Asset&id=99217897221957&w=420&h=420"
     openBtn.Visible = false
-    Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
-    local openStroke = Instance.new("UIStroke", openBtn)
-    openStroke.Thickness = 3
+    Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1,0)
+    local openStroke = Instance.new("UIStroke", openBtn); openStroke.Thickness = 3
 
-    -- Main Frame
+    -- Main frame
     local main = Instance.new("Frame")
-    main.Name = "MainFrame"
-    main.Size = UDim2.new(0, 390, 0, 240)
-    main.Position = UDim2.new(0.5, 0, 0.5, 0)
-    main.AnchorPoint = Vector2.new(0.5, 0.5)
-    main.BackgroundColor3 = MainColor
-    main.BackgroundTransparency = 0.3
-    main.Parent = screenGui
-    main.ClipsDescendants = false
-    Instance.new("UICorner", main).CornerRadius = UDim.new(0, 15)
-    local mainStroke = Instance.new("UIStroke", main)
-    mainStroke.Thickness = 2
+    main.Name = "MainFrame"; main.Size = UDim2.new(0,390,0,240)
+    main.Position = UDim2.new(0.5,0,0.5,0); main.AnchorPoint = Vector2.new(0.5,0.5)
+    main.BackgroundColor3 = MainColor; main.BackgroundTransparency = 0.3
+    main.Parent = screenGui; main.ClipsDescendants = false
+    Instance.new("UICorner", main).CornerRadius = UDim.new(0,15)
+    local mainStroke = Instance.new("UIStroke", main); mainStroke.Thickness = 2
 
-    -- ─── TOOLBAR ───
+    -- Toolbar
     local toolbar = Instance.new("Frame", main)
-    toolbar.Size = UDim2.new(0, 30, 0, 95)
-    toolbar.Position = UDim2.new(1, 5, 0, 10)
-    toolbar.BackgroundColor3 = Color3.new(1, 1, 1)
-    toolbar.BackgroundTransparency = 0.5
-    Instance.new("UICorner", toolbar).CornerRadius = UDim.new(0, 8)
-    local toolLayout = Instance.new("UIListLayout", toolbar)
-    toolLayout.Padding = UDim.new(0, 5)
-    toolLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    toolLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    toolbar.Size = UDim2.new(0,30,0,95); toolbar.Position = UDim2.new(1,5,0,10)
+    toolbar.BackgroundColor3 = Color3.new(1,1,1); toolbar.BackgroundTransparency = 0.5
+    Instance.new("UICorner", toolbar).CornerRadius = UDim.new(0,8)
+    local tbl = Instance.new("UIListLayout", toolbar)
+    tbl.Padding = UDim.new(0,5); tbl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tbl.VerticalAlignment = Enum.VerticalAlignment.Center
 
-    local function CreateToolBtn(text, color)
+    local function MakeToolBtn(txt, col)
         local b = Instance.new("TextButton", toolbar)
-        b.Size = UDim2.new(0, 22, 0, 22)
-        b.BackgroundColor3 = color or DarkPink
-        b.Text = text
-        b.TextColor3 = Color3.new(1, 1, 1)
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 13
-        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 5)
+        b.Size = UDim2.new(0,22,0,22); b.BackgroundColor3 = col
+        b.Text = txt; b.TextColor3 = Color3.new(1,1,1)
+        b.Font = Enum.Font.GothamBold; b.TextSize = 13
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0,5)
         return b
     end
+    local closeBtn = MakeToolBtn("-",  Color3.fromRGB(235,80,80))
+    local lockBtn  = MakeToolBtn("🔓", Color3.fromRGB(80,200,80))
+    local keyBtn   = MakeToolBtn("⌨",  DarkPink)
 
-    local closeBtn = CreateToolBtn("-",  Color3.fromRGB(235, 80, 80))
-    local lockBtn  = CreateToolBtn("🔓", Color3.fromRGB(80, 200, 80))
-    local keyBtn   = CreateToolBtn("⌨",  DarkPink)
-
-    -- ─── TOGGLE / LOCK / KEYBIND ───
-    local isToggling = false
+    -- Toggle/hide
+    local isTweening = false
     local function ToggleUI()
-        if isToggling then return end
-        isToggling = true
+        if isTweening then return end; isTweening = true
         if main.Visible then
-            local tw = TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0,0,0,0)})
-            tw:Play()
-            tw.Completed:Connect(function()
-                main.Visible = false
-                openBtn.Visible = true
-                isToggling = false
-            end)
+            TweenService:Create(main, TweenInfo.new(0.4,Enum.EasingStyle.Back,Enum.EasingDirection.In),{Size=UDim2.new(0,0,0,0)}):Play()
+            task.delay(0.4, function() main.Visible=false; openBtn.Visible=true; isTweening=false end)
         else
-            openBtn.Visible = false
-            main.Visible = true
-            main.Size = UDim2.new(0,0,0,0)
-            local tw = TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0,390,0,240)})
-            tw:Play()
-            tw.Completed:Connect(function() isToggling = false end)
+            openBtn.Visible=false; main.Visible=true; main.Size=UDim2.new(0,0,0,0)
+            local tw = TweenService:Create(main, TweenInfo.new(0.5,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,390,0,240)})
+            tw:Play(); tw.Completed:Connect(function() isTweening=false end)
         end
     end
 
     closeBtn.MouseButton1Click:Connect(function() PlayClickSound(); ToggleUI() end)
     lockBtn.MouseButton1Click:Connect(function()
-        PlayClickSound()
-        isLocked = not isLocked
+        PlayClickSound(); isLocked = not isLocked
         lockBtn.Text = isLocked and "🔒" or "🔓"
         lockBtn.BackgroundColor3 = isLocked and Color3.fromRGB(200,80,80) or Color3.fromRGB(80,200,80)
     end)
@@ -136,377 +213,355 @@ function Library:CreateWindow()
     local isBinding = false
     keyBtn.MouseButton1Click:Connect(function()
         if isBinding then return end
-        PlayClickSound(); isBinding = true; keyBtn.Text = "..."
-        local conn
-        conn = UserInputService.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Keyboard then
-                _G.ToggleKey = input.KeyCode
-                keyBtn.Text = "⌨"; isBinding = false; conn:Disconnect()
+        PlayClickSound(); isBinding=true; keyBtn.Text="..."
+        local c; c = UserInputService.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.Keyboard then
+                _G.ToggleKey=inp.KeyCode; keyBtn.Text="⌨"; isBinding=false; c:Disconnect()
             end
         end)
     end)
 
     -- Animated stroke
     coroutine.wrap(function()
-        local cols = {Color3.fromRGB(255,255,255), Color3.fromRGB(255,192,203), Color3.fromRGB(230,190,255)}
+        local cols = {Color3.fromRGB(255,255,255),Color3.fromRGB(255,192,203),Color3.fromRGB(230,190,255)}
         while task.wait() do
-            local t = (math.sin(tick()*2)+1)/2
-            local c = cols[1]:Lerp(cols[2],t):Lerp(cols[3],(math.cos(tick()*1.5)+1)/2)
-            mainStroke.Color = c
-            openStroke.Color = c
+            local t=(math.sin(tick()*2)+1)/2
+            local c=cols[1]:Lerp(cols[2],t):Lerp(cols[3],(math.cos(tick()*1.5)+1)/2)
+            mainStroke.Color=c; openStroke.Color=c
         end
     end)()
 
     openBtn.MouseButton1Click:Connect(function() PlayClickSound(); ToggleUI() end)
-    UserInputService.InputBegan:Connect(function(input, gpe)
-        if not gpe and input.KeyCode == _G.ToggleKey then PlayClickSound(); ToggleUI() end
+    UserInputService.InputBegan:Connect(function(inp,gpe)
+        if not gpe and inp.KeyCode == _G.ToggleKey then PlayClickSound(); ToggleUI() end
     end)
 
     -- Drag
     local function EnableDrag(obj)
         local dragging, dragInput, dragStart, startPos
-        obj.InputBegan:Connect(function(input)
+        obj.InputBegan:Connect(function(inp)
             if isLocked then return end
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true; dragStart = input.Position; startPos = obj.Position
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
-                end)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=true; dragStart=inp.Position; startPos=obj.Position
+                inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
             end
         end)
-        obj.InputChanged:Connect(function(input)
-            if isLocked then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-                dragInput = input
+        obj.InputChanged:Connect(function(inp)
+            if not isLocked and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+                dragInput=inp
             end
         end)
-        UserInputService.InputChanged:Connect(function(input)
-            if input == dragInput and dragging and not isLocked then
-                local d = input.Position - dragStart
-                obj.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
+        UserInputService.InputChanged:Connect(function(inp)
+            if inp==dragInput and dragging and not isLocked then
+                local d=inp.Position-dragStart
+                obj.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
             end
         end)
     end
     EnableDrag(main); EnableDrag(openBtn)
 
-    -- ─── SIDEBAR TABS ───
+    -- Sidebar
     local sidebar = Instance.new("Frame", main)
-    sidebar.Size = UDim2.new(0, 35, 0, 200)
-    sidebar.Position = UDim2.new(1, -40, 0.5, -100)
-    sidebar.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    sidebar.BackgroundTransparency = 0.65
-    Instance.new("UICorner", sidebar).CornerRadius = UDim.new(1, 0)
-    local sideLayout = Instance.new("UIListLayout", sidebar)
-    sideLayout.Padding = UDim.new(0, 7)
-    sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    sideLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    sidebar.Size=UDim2.new(0,35,0,200); sidebar.Position=UDim2.new(1,-40,0.5,-100)
+    sidebar.BackgroundColor3=Color3.fromRGB(255,255,255); sidebar.BackgroundTransparency=0.65
+    Instance.new("UICorner", sidebar).CornerRadius=UDim.new(1,0)
+    local sbl = Instance.new("UIListLayout", sidebar)
+    sbl.Padding=UDim.new(0,7); sbl.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    sbl.VerticalAlignment=Enum.VerticalAlignment.Center
 
-    -- ─── CONTENT AREA ───
+    -- Content area
     local tabContainer = Instance.new("Frame", main)
-    tabContainer.Size = UDim2.new(0, 335, 0, 215)
-    tabContainer.Position = UDim2.new(0, 8, 0, 10)
-    tabContainer.BackgroundTransparency = 1
+    tabContainer.Size=UDim2.new(0,335,0,215); tabContainer.Position=UDim2.new(0,8,0,10)
+    tabContainer.BackgroundTransparency=1
 
     local pages = Instance.new("Frame", tabContainer)
-    pages.Size = UDim2.new(1,0,1,0)
-    pages.BackgroundTransparency = 1
+    pages.Size=UDim2.new(1,0,1,0); pages.BackgroundTransparency=1
 
+    -- ══════════════════════════════════
+    --   ELEMENT HELPERS
+    -- ══════════════════════════════════
+
+    -- Animated button (bounces on click)
+    local function MakeAnimButton(parent, text, yPos, callback)
+        local btn = Instance.new("TextButton", parent)
+        btn.Size = UDim2.new(1,-4,0,28); btn.Position = UDim2.new(0,2,0,yPos)
+        btn.BackgroundColor3 = Color3.fromRGB(255,255,255); btn.BackgroundTransparency = 0.45
+        btn.Text = text; btn.Font = Enum.Font.GothamBold
+        btn.TextColor3 = TextColor; btn.TextSize = 10
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0,7)
+        local stroke = Instance.new("UIStroke", btn); stroke.Color = DarkPink; stroke.Thickness = 1.2
+
+        btn.MouseButton1Click:Connect(function()
+            PlayClickSound()
+            -- Click animation: shrink then bounce back
+            TweenService:Create(btn, TweenInfo.new(0.08,Enum.EasingStyle.Quad,Enum.EasingDirection.Out), {BackgroundColor3=Color3.fromRGB(255,210,220)}):Play()
+            task.delay(0.08, function()
+                TweenService:Create(btn, TweenInfo.new(0.15,Enum.EasingStyle.Back,Enum.EasingDirection.Out), {BackgroundColor3=Color3.fromRGB(255,255,255)}):Play()
+            end)
+            if callback then callback() end
+        end)
+
+        btn.MouseEnter:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(255,230,235)}):Play()
+        end)
+        btn.MouseLeave:Connect(function()
+            TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3=Color3.fromRGB(255,255,255)}):Play()
+        end)
+        return btn
+    end
+
+    -- Pill Toggle
+    local function MakeToggle(parent, labelText, yPos, savedKey, onCallback)
+        local state = S[savedKey] or false
+
+        local row = Instance.new("Frame", parent)
+        row.Size = UDim2.new(1,-4,0,26); row.Position = UDim2.new(0,2,0,yPos)
+        row.BackgroundColor3 = Color3.fromRGB(255,255,255); row.BackgroundTransparency = 0.45
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0,7)
+
+        local lbl = Instance.new("TextLabel", row)
+        lbl.Size = UDim2.new(0.7,0,1,0); lbl.Position = UDim2.new(0,8,0,0)
+        lbl.Text = labelText; lbl.Font = Enum.Font.GothamBold
+        lbl.TextColor3 = TextColor; lbl.TextSize = 9
+        lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.BackgroundTransparency = 1
+
+        -- Pill background
+        local pill = Instance.new("Frame", row)
+        pill.Size = UDim2.new(0,36,0,16); pill.Position = UDim2.new(1,-42,0.5,-8)
+        pill.BackgroundColor3 = state and Green or Gray
+        Instance.new("UICorner", pill).CornerRadius = UDim.new(1,0)
+
+        -- Knob
+        local knob = Instance.new("Frame", pill)
+        knob.Size = UDim2.new(0,12,0,12); knob.Position = state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)
+        knob.BackgroundColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+
+        local function SetState(newState)
+            state = newState; S[savedKey] = state; Save()
+            TweenService:Create(pill,TweenInfo.new(0.2),{BackgroundColor3=state and Green or Gray}):Play()
+            TweenService:Create(knob,TweenInfo.new(0.2),{Position=state and UDim2.new(1,-14,0.5,-6) or UDim2.new(0,2,0.5,-6)}):Play()
+            if onCallback then onCallback(state) end
+        end
+
+        local btn = Instance.new("TextButton", row)
+        btn.Size = UDim2.new(1,0,1,0); btn.BackgroundTransparency = 1; btn.Text = ""
+        btn.MouseButton1Click:Connect(function() PlayClickSound(); SetState(not state) end)
+
+        -- Init callback for already-true saved states
+        if state and onCallback then task.spawn(function() task.wait(1.2); onCallback(true) end) end
+        return row
+    end
+
+    -- Slider
+    local function MakeSlider(parent, labelText, yPos, min, max, savedKey, suffix, onCallback)
+        local value = S[savedKey] or min
+
+        local row = Instance.new("Frame", parent)
+        row.Size = UDim2.new(1,-4,0,38); row.Position = UDim2.new(0,2,0,yPos)
+        row.BackgroundColor3 = Color3.fromRGB(255,255,255); row.BackgroundTransparency = 0.45
+        Instance.new("UICorner", row).CornerRadius = UDim.new(0,7)
+
+        local lbl = Instance.new("TextLabel", row)
+        lbl.Size = UDim2.new(0.6,0,0,18); lbl.Position = UDim2.new(0,8,0,2)
+        lbl.Text = labelText; lbl.Font = Enum.Font.GothamBold
+        lbl.TextColor3 = TextColor; lbl.TextSize = 9
+        lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.BackgroundTransparency = 1
+
+        local valLbl = Instance.new("TextLabel", row)
+        valLbl.Size = UDim2.new(0.35,0,0,18); valLbl.Position = UDim2.new(0.62,0,0,2)
+        valLbl.Text = tostring(value)..suffix; valLbl.Font = Enum.Font.GothamBold
+        valLbl.TextColor3 = DarkPink; valLbl.TextSize = 9
+        valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.BackgroundTransparency = 1
+
+        -- Track
+        local track = Instance.new("Frame", row)
+        track.Size = UDim2.new(1,-16,0,6); track.Position = UDim2.new(0,8,0,24)
+        track.BackgroundColor3 = Color3.fromRGB(220,190,200)
+        Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
+
+        local fill = Instance.new("Frame", track)
+        fill.Size = UDim2.new((value-min)/(max-min),0,1,0); fill.Position = UDim2.new(0,0,0,0)
+        fill.BackgroundColor3 = DarkPink
+        Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+
+        local knob = Instance.new("Frame", track)
+        knob.Size = UDim2.new(0,13,0,13); knob.Position = UDim2.new((value-min)/(max-min),0,0.5,-6)
+        knob.BackgroundColor3 = Color3.new(1,1,1)
+        Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+        local ks = Instance.new("UIStroke", knob); ks.Color = DarkPink; ks.Thickness = 1.5
+
+        local dragging = false
+        local function UpdateFromX(absX)
+            local trackAbs = track.AbsolutePosition.X
+            local trackW   = track.AbsoluteSize.X
+            local pct = math.clamp((absX - trackAbs) / trackW, 0, 1)
+            value = math.floor(min + pct*(max-min))
+            S[savedKey] = value; Save()
+            valLbl.Text = tostring(value)..suffix
+            fill.Size = UDim2.new(pct,0,1,0)
+            knob.Position = UDim2.new(pct,0,0.5,-6)
+            if onCallback then onCallback(value) end
+        end
+
+        knob.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=true
+            end
+        end)
+        track.InputBegan:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=true; UpdateFromX(inp.Position.X)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(inp)
+            if dragging and (inp.UserInputType==Enum.UserInputType.MouseMovement or inp.UserInputType==Enum.UserInputType.Touch) then
+                UpdateFromX(inp.Position.X)
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(inp)
+            if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+                dragging=false
+            end
+        end)
+        return row
+    end
+
+    -- ══════════════════════════════════
+    --   CREATE TAB
+    -- ══════════════════════════════════
     function Library:CreateTab(name, iconText)
         local page = Instance.new("ScrollingFrame", pages)
-        page.Name = name.."Page"
-        page.Size = UDim2.new(1,0,1,0)
-        page.BackgroundTransparency = 1
-        page.Visible = false
-        page.ScrollBarThickness = 0
-        page.CanvasSize = UDim2.new(0,0,0,0)
-        page.AutomaticCanvasSize = Enum.AutomaticSize.Y
-
-        local layout = Instance.new("UIGridLayout", page)
-        layout.CellSize = UDim2.new(0.48, 0, 0, 35)
-        layout.CellPadding = UDim2.new(0.02, 0, 0.02, 0)
+        page.Name=name.."Page"; page.Size=UDim2.new(1,0,1,0)
+        page.BackgroundTransparency=1; page.Visible=false
+        page.ScrollBarThickness=3; page.ScrollBarImageColor3=DarkPink
+        page.CanvasSize=UDim2.new(0,0,0,0); page.AutomaticCanvasSize=Enum.AutomaticSize.Y
 
         local tabBtn = Instance.new("TextButton", sidebar)
-        tabBtn.Size = UDim2.new(0, 27, 0, 27)
-        tabBtn.BackgroundColor3 = DarkPink
-        tabBtn.BackgroundTransparency = 0.2
-        tabBtn.Text = iconText or name:sub(1,1)
-        tabBtn.TextScaled = true
-        tabBtn.Font = Enum.Font.GothamBold
-        tabBtn.TextColor3 = Color3.new(1,1,1)
-        Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(1,0)
+        tabBtn.Size=UDim2.new(0,27,0,27); tabBtn.BackgroundColor3=DarkPink
+        tabBtn.BackgroundTransparency=0.2; tabBtn.Text=iconText or name:sub(1,1)
+        tabBtn.TextScaled=true; tabBtn.Font=Enum.Font.GothamBold; tabBtn.TextColor3=Color3.new(1,1,1)
+        Instance.new("UICorner", tabBtn).CornerRadius=UDim.new(1,0)
 
         tabBtn.MouseButton1Click:Connect(function()
             PlayClickSound()
-            for _, v in pairs(pages:GetChildren()) do v.Visible = false end
-            page.Visible = true
+            for _,v in pairs(pages:GetChildren()) do if v:IsA("ScrollingFrame") then v.Visible=false end end
+            page.Visible=true
+            TweenService:Create(tabBtn,TweenInfo.new(0.1),{BackgroundTransparency=0}):Play()
         end)
 
+        local yOffset = 4
         local elements = {}
 
+        -- Dashboard (home tab special layout)
         function elements:AddDashboard()
-            layout:Destroy()
-
             local function CreateBox(size, pos, labelText, labelSide)
                 local box = Instance.new("Frame", page)
-                box.Size = size
-                box.Position = pos
-                box.BackgroundColor3 = Color3.fromRGB(255,255,255)
-                box.BackgroundTransparency = 0.55
-                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
-
+                box.Size=size; box.Position=pos
+                box.BackgroundColor3=Color3.fromRGB(255,255,255); box.BackgroundTransparency=0.55
+                Instance.new("UICorner", box).CornerRadius=UDim.new(0,10)
                 if labelText then
                     local bar = Instance.new("Frame", box)
-                    bar.Size = UDim2.new(0, 18, 1, 0)
-                    bar.BackgroundColor3 = DarkPink
-                    bar.BackgroundTransparency = 0.2
-                    bar.Position = (labelSide == "left") and UDim2.new(0,0,0,0) or UDim2.new(1,-18,0,0)
-                    Instance.new("UICorner", bar).CornerRadius = UDim.new(0,10)
-                    local lbl = Instance.new("TextLabel", bar)
-                    lbl.Size = UDim2.new(1,0,1,0)
-                    lbl.Text = labelText
-                    lbl.Font = Enum.Font.GothamBold
-                    lbl.TextColor3 = Color3.new(1,1,1)
-                    lbl.TextSize = 7
-                    lbl.TextWrapped = true
-                    lbl.BackgroundTransparency = 1
+                    bar.Size=UDim2.new(0,18,1,0)
+                    bar.BackgroundColor3=DarkPink; bar.BackgroundTransparency=0.2
+                    bar.Position = (labelSide=="left") and UDim2.new(0,0,0,0) or UDim2.new(1,-18,0,0)
+                    Instance.new("UICorner", bar).CornerRadius=UDim.new(0,10)
+                    local lbl=Instance.new("TextLabel",bar); lbl.Size=UDim2.new(1,0,1,0)
+                    lbl.Text=labelText; lbl.Font=Enum.Font.GothamBold; lbl.TextColor3=Color3.new(1,1,1)
+                    lbl.TextSize=7; lbl.TextWrapped=true; lbl.BackgroundTransparency=1
                 end
                 return box
             end
 
-            -- ── ROW 1 ──
-            -- [PLAYER box: 60%] — no slide dots
-            local userBox = CreateBox(
-                UDim2.new(0.605, -3, 0.47, 0),
-                UDim2.new(0, 0, 0, 0),
-                "P\nL\nA\nY\nE\nR", "left"
-            )
-
+            -- ROW 1
+            local userBox = CreateBox(UDim2.new(0.605,-3,0.47,0), UDim2.new(0,0,0,0), "P\nL\nA\nY\nE\nR", "left")
             local pfp = Instance.new("ImageLabel", userBox)
-            pfp.Size = UDim2.new(0, 52, 0, 52)
-            pfp.Position = UDim2.new(0, 24, 0.5, -26)
-            pfp.Image = Players:GetUserThumbnailAsync(
-                Players.LocalPlayer.UserId,
-                Enum.ThumbnailType.HeadShot,
-                Enum.ThumbnailSize.Size100x100
-            )
-            pfp.BackgroundTransparency = 1
-            Instance.new("UICorner", pfp).CornerRadius = UDim.new(1,0)
+            pfp.Size=UDim2.new(0,52,0,52); pfp.Position=UDim2.new(0,24,0.5,-26)
+            pfp.Image=Players:GetUserThumbnailAsync(Players.LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+            pfp.BackgroundTransparency=1; Instance.new("UICorner", pfp).CornerRadius=UDim.new(1,0)
+            local g1=Instance.new("TextLabel",userBox); g1.Size=UDim2.new(0.52,0,0.4,0); g1.Position=UDim2.new(0,83,0.08,0)
+            g1.Text="The lanterns light your way~,"; g1.Font=Enum.Font.GothamBold; g1.TextColor3=TextColor
+            g1.TextSize=8; g1.TextXAlignment=Enum.TextXAlignment.Left; g1.TextWrapped=true; g1.BackgroundTransparency=1
+            local g2=Instance.new("TextLabel",userBox); g2.Size=UDim2.new(0.52,0,0.28,0); g2.Position=UDim2.new(0,83,0.44,0)
+            g2.Text=Players.LocalPlayer.DisplayName; g2.Font=Enum.Font.GothamBold; g2.TextColor3=DarkPink
+            g2.TextSize=13; g2.TextXAlignment=Enum.TextXAlignment.Left; g2.BackgroundTransparency=1
+            local g3=Instance.new("TextLabel",userBox); g3.Size=UDim2.new(0.52,0,0.22,0); g3.Position=UDim2.new(0,83,0.74,0)
+            g3.Text="Welcome to TokaiHub"; g3.Font=Enum.Font.Gotham; g3.TextColor3=Color3.fromRGB(160,100,120)
+            g3.TextSize=7; g3.TextXAlignment=Enum.TextXAlignment.Left; g3.BackgroundTransparency=1
 
-            local greet = Instance.new("TextLabel", userBox)
-            greet.Size = UDim2.new(0.52, 0, 0.4, 0)
-            greet.Position = UDim2.new(0, 83, 0.08, 0)
-            greet.Text = "The lanterns light your way~,"
-            greet.Font = Enum.Font.GothamBold
-            greet.TextColor3 = TextColor
-            greet.TextSize = 8
-            greet.TextXAlignment = Enum.TextXAlignment.Left
-            greet.TextWrapped = true
-            greet.BackgroundTransparency = 1
-
-            local playerName = Instance.new("TextLabel", userBox)
-            playerName.Size = UDim2.new(0.52, 0, 0.28, 0)
-            playerName.Position = UDim2.new(0, 83, 0.44, 0)
-            playerName.Text = Players.LocalPlayer.DisplayName
-            playerName.Font = Enum.Font.GothamBold
-            playerName.TextColor3 = DarkPink
-            playerName.TextSize = 13
-            playerName.TextXAlignment = Enum.TextXAlignment.Left
-            playerName.BackgroundTransparency = 1
-
-            local subGreet = Instance.new("TextLabel", userBox)
-            subGreet.Size = UDim2.new(0.52, 0, 0.22, 0)
-            subGreet.Position = UDim2.new(0, 83, 0.74, 0)
-            subGreet.Text = "Welcome to TokaiHub"
-            subGreet.Font = Enum.Font.Gotham
-            subGreet.TextColor3 = Color3.fromRGB(160, 100, 120)
-            subGreet.TextSize = 7
-            subGreet.TextXAlignment = Enum.TextXAlignment.Left
-            subGreet.BackgroundTransparency = 1
-
-            -- [ABOUT box: 39%]
-            local aboutBox = CreateBox(
-                UDim2.new(0.385, -3, 0.47, 0),
-                UDim2.new(0.615, 0, 0, 0),
-                "A\nB\nO\nU\nT", "right"
-            )
-
-            local aboutDesc = Instance.new("TextLabel", aboutBox)
-            aboutDesc.Size = UDim2.new(0.82, 0, 0.52, 0)
-            aboutDesc.Position = UDim2.new(0.04, 0, 0.04, 0)
-            aboutDesc.Text = "TokaiHub is a powerful and cute Roblox UI library. Lightweight, draggable, and customizable."
-            aboutDesc.Font = Enum.Font.Gotham
-            aboutDesc.TextColor3 = TextColor
-            aboutDesc.TextSize = 7
-            aboutDesc.TextWrapped = true
-            aboutDesc.TextXAlignment = Enum.TextXAlignment.Left
-            aboutDesc.BackgroundTransparency = 1
-
-            -- Discord copy button
-            local discordBtn = Instance.new("TextButton", aboutBox)
-            discordBtn.Size = UDim2.new(0.82, 0, 0.3, 0)
-            discordBtn.Position = UDim2.new(0.04, 0, 0.62, 0)
-            discordBtn.BackgroundColor3 = Color3.fromRGB(255,255,255)
-            discordBtn.BackgroundTransparency = 0.4
-            discordBtn.Text = "💬 discord.gg/nn783R2fK2"
-            discordBtn.Font = Enum.Font.GothamBold
-            discordBtn.TextColor3 = DarkPink
-            discordBtn.TextSize = 7
-            discordBtn.TextWrapped = false
-            discordBtn.TextScaled = false
-            Instance.new("UICorner", discordBtn).CornerRadius = UDim.new(0,5)
-
-            discordBtn.MouseButton1Click:Connect(function()
+            local aboutBox = CreateBox(UDim2.new(0.385,-3,0.47,0), UDim2.new(0.615,0,0,0), "A\nB\nO\nU\nT", "right")
+            local ad=Instance.new("TextLabel",aboutBox); ad.Size=UDim2.new(0.82,0,0.52,0); ad.Position=UDim2.new(0.04,0,0.04,0)
+            ad.Text="TokaiHub is a powerful and cute Roblox UI library. Lightweight, draggable, and customizable."
+            ad.Font=Enum.Font.Gotham; ad.TextColor3=TextColor; ad.TextSize=7; ad.TextWrapped=true
+            ad.TextXAlignment=Enum.TextXAlignment.Left; ad.BackgroundTransparency=1
+            local dcBtn=Instance.new("TextButton",aboutBox); dcBtn.Size=UDim2.new(0.82,0,0.3,0); dcBtn.Position=UDim2.new(0.04,0,0.62,0)
+            dcBtn.BackgroundColor3=Color3.fromRGB(255,255,255); dcBtn.BackgroundTransparency=0.4
+            dcBtn.Text="💬 discord.gg/nn783R2fK2"; dcBtn.Font=Enum.Font.GothamBold; dcBtn.TextColor3=DarkPink
+            dcBtn.TextSize=7; Instance.new("UICorner",dcBtn).CornerRadius=UDim.new(0,5)
+            dcBtn.MouseButton1Click:Connect(function()
                 PlayClickSound()
-                if setclipboard then
-                    setclipboard(DISCORD)
-                    discordBtn.Text = "✓ Link đã copy!"
-                    task.delay(2, function()
-                        discordBtn.Text = "💬 discord.gg/nn783R2fK2"
-                    end)
-                else
-                    discordBtn.Text = "discord.gg/nn783R2fK2"
-                end
+                if setclipboard then setclipboard(DISCORD) end
+                dcBtn.Text="✓ Copied!"
+                task.delay(2, function() dcBtn.Text="💬 discord.gg/nn783R2fK2" end)
             end)
 
-            -- ── ROW 2 ── (no music — just clock + status)
-            -- [CLOCK box: 79%]
-            local clockBox = CreateBox(
-                UDim2.new(0.79, -3, 0.47, 0),
-                UDim2.new(0, 0, 0.53, 0),
-                nil, nil
-            )
+            -- ROW 2
+            local clockBox = CreateBox(UDim2.new(0.79,-3,0.47,0), UDim2.new(0,0,0.53,0), nil, nil)
+            local timeRow=Instance.new("Frame",clockBox); timeRow.Size=UDim2.new(1,-8,0,26); timeRow.Position=UDim2.new(0,6,0,5); timeRow.BackgroundTransparency=1
+            local trl=Instance.new("UIListLayout",timeRow); trl.FillDirection=Enum.FillDirection.Horizontal; trl.VerticalAlignment=Enum.VerticalAlignment.Center; trl.Padding=UDim.new(0,4)
+            local timeLabel=Instance.new("TextLabel",timeRow); timeLabel.Size=UDim2.new(0,130,1,0); timeLabel.Font=Enum.Font.GothamBold
+            timeLabel.TextSize=20; timeLabel.TextColor3=TextColor; timeLabel.BackgroundTransparency=1; timeLabel.TextXAlignment=Enum.TextXAlignment.Left
+            local ampmBox=Instance.new("Frame",timeRow); ampmBox.Size=UDim2.new(0,22,0,13); ampmBox.BackgroundColor3=DarkPink; Instance.new("UICorner",ampmBox).CornerRadius=UDim.new(0,4)
+            local ampmLbl=Instance.new("TextLabel",ampmBox); ampmLbl.Size=UDim2.new(1,0,1,0); ampmLbl.Text="PM"; ampmLbl.TextColor3=Color3.new(1,1,1); ampmLbl.TextSize=8; ampmLbl.Font=Enum.Font.GothamBold; ampmLbl.BackgroundTransparency=1
+            local infoLbl=Instance.new("TextLabel",clockBox); infoLbl.Size=UDim2.new(1,-8,0,14); infoLbl.Position=UDim2.new(0,6,0,34)
+            infoLbl.Text="UTC+8 / GMT+8   |   "..os.date("%A, %B %d"); infoLbl.TextSize=7; infoLbl.Font=Enum.Font.Gotham; infoLbl.TextColor3=DarkPink; infoLbl.BackgroundTransparency=1; infoLbl.TextXAlignment=Enum.TextXAlignment.Left
+            local statLine=Instance.new("TextLabel",clockBox); statLine.Size=UDim2.new(1,-8,0,13); statLine.Position=UDim2.new(0,6,0,50)
+            statLine.Text="Exec: 1  Up: 0m 0s  Sess: 0s"; statLine.TextSize=7; statLine.Font=Enum.Font.GothamBold; statLine.TextColor3=TextColor; statLine.BackgroundTransparency=1; statLine.TextXAlignment=Enum.TextXAlignment.Left
+            local viaLbl=Instance.new("TextLabel",clockBox); viaLbl.Size=UDim2.new(1,-8,0,12); viaLbl.Position=UDim2.new(0,6,0,65)
+            viaLbl.Text="via TokaiHub"; viaLbl.TextSize=7; viaLbl.Font=Enum.Font.Gotham; viaLbl.TextColor3=DarkPink; viaLbl.BackgroundTransparency=1; viaLbl.TextXAlignment=Enum.TextXAlignment.Left
 
-            -- Time row: [HH:MM:SS] [AM/PM badge] — side by side using pixel layout
-            local timeRow = Instance.new("Frame", clockBox)
-            timeRow.Size = UDim2.new(1, -8, 0, 26)
-            timeRow.Position = UDim2.new(0, 6, 0, 5)
-            timeRow.BackgroundTransparency = 1
-            local timeRowLayout = Instance.new("UIListLayout", timeRow)
-            timeRowLayout.FillDirection = Enum.FillDirection.Horizontal
-            timeRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-            timeRowLayout.Padding = UDim.new(0, 4)
-
-            local timeLabel = Instance.new("TextLabel", timeRow)
-            timeLabel.Size = UDim2.new(0, 130, 1, 0)
-            timeLabel.Font = Enum.Font.GothamBold
-            timeLabel.TextSize = 20
-            timeLabel.TextColor3 = TextColor
-            timeLabel.BackgroundTransparency = 1
-            timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            local ampmBox = Instance.new("Frame", timeRow)
-            ampmBox.Size = UDim2.new(0, 22, 0, 13)
-            ampmBox.BackgroundColor3 = DarkPink
-            Instance.new("UICorner", ampmBox).CornerRadius = UDim.new(0, 4)
-            local ampmLabel = Instance.new("TextLabel", ampmBox)
-            ampmLabel.Size = UDim2.new(1, 0, 1, 0)
-            ampmLabel.Text = "PM"
-            ampmLabel.TextColor3 = Color3.new(1, 1, 1)
-            ampmLabel.TextSize = 8
-            ampmLabel.Font = Enum.Font.GothamBold
-            ampmLabel.BackgroundTransparency = 1
-
-            -- UTC + Date on one line
-            local infoLabel = Instance.new("TextLabel", clockBox)
-            infoLabel.Size = UDim2.new(1, -8, 0, 14)
-            infoLabel.Position = UDim2.new(0, 6, 0, 34)
-            infoLabel.Text = "UTC+8 / GMT+8   |   " .. os.date("%A, %B %d")
-            infoLabel.TextSize = 7
-            infoLabel.Font = Enum.Font.Gotham
-            infoLabel.TextColor3 = DarkPink
-            infoLabel.BackgroundTransparency = 1
-            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            local statLine = Instance.new("TextLabel", clockBox)
-            statLine.Size = UDim2.new(1, -8, 0, 13)
-            statLine.Position = UDim2.new(0, 6, 0, 50)
-            statLine.Text = "Exec: 1   Up: 0m 0s   Sess: 0s"
-            statLine.TextSize = 7
-            statLine.Font = Enum.Font.GothamBold
-            statLine.TextColor3 = TextColor
-            statLine.BackgroundTransparency = 1
-            statLine.TextXAlignment = Enum.TextXAlignment.Left
-
-            local viaLabel = Instance.new("TextLabel", clockBox)
-            viaLabel.Size = UDim2.new(1, -8, 0, 12)
-            viaLabel.Position = UDim2.new(0, 6, 0, 65)
-            viaLabel.Text = "via TokaiHub"
-            viaLabel.TextSize = 7
-            viaLabel.Font = Enum.Font.Gotham
-            viaLabel.TextColor3 = DarkPink
-            viaLabel.BackgroundTransparency = 1
-            viaLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-            -- [STATUS dots box: 20%]
-            local statusBox = CreateBox(
-                UDim2.new(0.20, -3, 0.47, 0),
-                UDim2.new(0.80, 0, 0.53, 0),
-                "S\nT\nA\nT\nU\nS", "right"
-            )
-
-            local dotColors = {
-                Color3.fromRGB(34, 197, 94),
-                Color3.fromRGB(34, 197, 94),
-                Color3.fromRGB(251, 146, 60),
-                Color3.fromRGB(239, 68, 68),
-                Color3.fromRGB(107, 114, 128),
-            }
-            for i, col in ipairs(dotColors) do
-                local dot = Instance.new("Frame", statusBox)
-                dot.Size = UDim2.new(0, 9, 0, 9)
-                dot.Position = UDim2.new(0.18, 0, 0, 9 + (i-1)*18)
-                dot.BackgroundColor3 = col
-                Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+            local statusBox = CreateBox(UDim2.new(0.20,-3,0.47,0), UDim2.new(0.80,0,0.53,0), "S\nT\nA\nT\nU\nS", "right")
+            local dotCols={Color3.fromRGB(34,197,94),Color3.fromRGB(34,197,94),Color3.fromRGB(251,146,60),Color3.fromRGB(239,68,68),Color3.fromRGB(107,114,128)}
+            for i,col in ipairs(dotCols) do
+                local dot=Instance.new("Frame",statusBox); dot.Size=UDim2.new(0,9,0,9); dot.Position=UDim2.new(0.18,0,0,9+(i-1)*18); dot.BackgroundColor3=col; Instance.new("UICorner",dot).CornerRadius=UDim.new(1,0)
             end
 
-            -- Live clock
             task.spawn(function()
-                local sessStart = os.time()
+                local sessStart=os.time()
                 while task.wait(1) do
-                    timeLabel.Text = os.date("%I:%M:%S")
-                    ampmLabel.Text = os.date("%p")
-                    infoLabel.Text = "UTC+8 / GMT+8   |   " .. os.date("%A, %B %d")
-                    local diff = os.time() - startTime
-                    local sess = os.time() - sessStart
-                    local execN = math.floor(diff / 12) % 8 + 1
-                    statLine.Text = string.format(
-                        "Exec: %d   Up: %dm %ds   Sess: %ds",
-                        execN, math.floor(diff/60), diff%60, sess
-                    )
+                    timeLabel.Text=os.date("%I:%M:%S"); ampmLbl.Text=os.date("%p")
+                    infoLbl.Text="UTC+8 / GMT+8   |   "..os.date("%A, %B %d")
+                    local diff=os.time()-startTime; local sess=os.time()-sessStart
+                    statLine.Text=string.format("Exec: %d  Up: %dm %ds  Sess: %ds", math.floor(diff/12)%8+1, math.floor(diff/60), diff%60, sess)
                 end
             end)
         end
 
+        -- AddButton (animated)
         function elements:AddButton(text, callback)
-            local btn = Instance.new("TextButton", page)
-            btn.BackgroundColor3 = Color3.fromRGB(255,255,255)
-            btn.BackgroundTransparency = 0.5
-            btn.Text = text
-            btn.Font = Enum.Font.GothamSemibold
-            btn.TextColor3 = TextColor
-            btn.TextSize = 10
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0,5)
-            btn.MouseButton1Click:Connect(function() PlayClickSound(); callback() end)
+            MakeAnimButton(page, text, yOffset, callback)
+            yOffset = yOffset + 32
         end
 
-        function elements:AddToggle(text, default, callback)
-            local state = default or false
-            local btn = Instance.new("TextButton", page)
-            btn.BackgroundColor3 = state and DarkPink or Color3.fromRGB(255,255,255)
-            btn.BackgroundTransparency = 0.3
-            btn.Text = (state and "[ON] " or "[OFF] ")..text
-            btn.Font = Enum.Font.GothamSemibold
-            btn.TextColor3 = state and Color3.new(1,1,1) or TextColor
-            btn.TextSize = 10
-            Instance.new("UICorner", btn).CornerRadius = UDim.new(0,5)
-            btn.MouseButton1Click:Connect(function()
-                PlayClickSound()
-                state = not state
-                btn.BackgroundColor3 = state and DarkPink or Color3.fromRGB(255,255,255)
-                btn.Text = (state and "[ON] " or "[OFF] ")..text
-                btn.TextColor3 = state and Color3.new(1,1,1) or TextColor
-                callback(state)
-            end)
+        -- AddToggle (pill, auto-save)
+        function elements:AddToggle(text, savedKey, callback)
+            MakeToggle(page, text, yOffset, savedKey, callback)
+            yOffset = yOffset + 30
+        end
+
+        -- AddSlider (draggable, auto-save)
+        function elements:AddSlider(text, min, max, savedKey, suffix, callback)
+            MakeSlider(page, text, yOffset, min, max, savedKey, suffix or "", callback)
+            yOffset = yOffset + 42
+        end
+
+        -- AddSection label
+        function elements:AddSection(text)
+            local lbl = Instance.new("TextLabel", page)
+            lbl.Size=UDim2.new(1,-4,0,18); lbl.Position=UDim2.new(0,2,0,yOffset)
+            lbl.Text="── "..text.." ──"; lbl.Font=Enum.Font.GothamBold
+            lbl.TextColor3=DarkPink; lbl.TextSize=9; lbl.BackgroundTransparency=1
+            yOffset = yOffset + 22
         end
 
         if #sidebar:GetChildren() == 1 then page.Visible = true end
@@ -516,20 +571,61 @@ function Library:CreateWindow()
     return Library
 end
 
--- ═══════════════════════════════
--- SETUP
--- ═══════════════════════════════
+-- ═══════════════════════════════════════════
+--   SETUP — Tabs & Features
+-- ═══════════════════════════════════════════
 local win = Library:CreateWindow()
 
+-- HOME TAB
 local homeTab = win:CreateTab("Home", "H")
 homeTab:AddDashboard()
 
+-- MAIN TAB (test buttons with animation)
 local mainTab = win:CreateTab("Main", "M")
-mainTab:AddButton("Test Button", function()
-    print("TokaiHub clicked!")
+mainTab:AddSection("Test Buttons")
+mainTab:AddButton("🔔 Noti Test", function()
+    local sg = Instance.new("ScreenGui", (gethui and gethui()) or game.CoreGui)
+    sg.IgnoreGuiInset = true
+    local f = Instance.new("Frame", sg); f.Size=UDim2.new(0,200,0,36)
+    f.Position=UDim2.new(0.5,-100,0,80); f.BackgroundColor3=Color3.fromRGB(235,110,140)
+    f.BackgroundTransparency=0.1; Instance.new("UICorner",f).CornerRadius=UDim.new(0,10)
+    local t=Instance.new("TextLabel",f); t.Size=UDim2.new(1,0,1,0); t.Text="✓ TokaiHub đang hoạt động!"
+    t.Font=Enum.Font.GothamBold; t.TextColor3=Color3.new(1,1,1); t.TextSize=11; t.BackgroundTransparency=1
+    TweenService:Create(f,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Position=UDim2.new(0.5,-100,0,90)}):Play()
+    task.delay(2.5, function() TweenService:Create(f,TweenInfo.new(0.3),{BackgroundTransparency=1}):Play(); task.delay(0.3,function() sg:Destroy() end) end)
+end)
+mainTab:AddButton("💨 Reset Character", function()
+    Players.LocalPlayer:LoadCharacter()
+end)
+mainTab:AddButton("📋 Copy Username", function()
+    if setclipboard then setclipboard(Players.LocalPlayer.Name) end
+end)
+mainTab:AddButton("🌐 Print Game Info", function()
+    print("Game ID:", game.PlaceId, "| Player:", Players.LocalPlayer.Name)
 end)
 
+-- SETTINGS TAB (sliders + toggles + auto-save)
 local settingsTab = win:CreateTab("Settings", "S")
-settingsTab:AddToggle("Show FPS", false, function(state)
-    print("Show FPS:", state)
+
+settingsTab:AddSection("Camera")
+settingsTab:AddSlider("Field of View", 50, 130, "fov", "°", function(v)
+    Camera.FieldOfView = v
+end)
+
+settingsTab:AddSection("Movement")
+settingsTab:AddSlider("Walk Speed", 4, 100, "speed", " sp", function(v)
+    local char = Players.LocalPlayer.Character
+    local hum = char and char:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = v end
+end)
+settingsTab:AddToggle("Noclip", "noclip", function(state)
+    ApplyNoclip(state)
+end)
+settingsTab:AddToggle("Infinite Jump", "infiniteJump", function(state)
+    ApplyInfiniteJump(state)
+end)
+
+settingsTab:AddSection("Visual")
+settingsTab:AddToggle("Fullbright", "fullbright", function(state)
+    ApplyFullbright(state)
 end)
